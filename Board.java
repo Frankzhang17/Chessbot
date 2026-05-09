@@ -1,4 +1,5 @@
 import java.util.Arrays;
+import java.util.Scanner;
 
 public class Board{
     int [] squares = new int[64];
@@ -181,13 +182,145 @@ public int[][] bishopMoves(int row, int col){
     }
     return Arrays.copyOf(moves, count);
 }
+
+public int[][] queenMoves(int row, int col){
+    int[][]moves = new int [27][2];
+    int count = 0;
+    int[][] directions = {{1,0},{-1,0},{0,1},{0,-1},{1,1},{1,-1},{-1,1},{-1,-1}};
+
+    for (int d = 0; d < 8; d++){
+        for (int step = 1; step <=7; step++){
+            int newRow = row + directions[d][0] * step;
+            int newCol = col + directions[d][1] * step;
+            if (newRow < 0 || newRow > 7 || newCol < 0 || newCol > 7){
+                break;
+            }
+            if ((get(row, col) > 0 ) && (get(newRow, newCol) > 0 && get(row, col) > 0)){
+                break;
+            }
+            if ((get(row, col) < 0 ) && (get(newRow, newCol) < 0 && get(row, col) < 0)){
+                break;
+            }
+            if (get(row, col) > 0 && get(newRow, newCol) < 0){
+                moves[count][0] = newRow;
+                moves[count][1] = newCol;
+                count++;
+                break;
+            }
+            if (get(row, col) < 0 && get(newRow, newCol) > 0){
+                moves[count][0] = newRow;
+                moves[count][1] = newCol;
+                count++;
+                break;
+            }
+            moves[count][0] = newRow;
+            moves[count][1] = newCol;
+            count++;
+        }
+        
+    }
+    return Arrays.copyOf(moves, count);
+}
+
+public int[][] knightMoves(int row, int col){
+    int[] rowOffsets = {-2, -2, -1, -1,  1,  1,  2,  2};
+    int[] colOffsets = {-1,  1, -2,  2, -2,  2, -1,  1};
+    int[][] moves = new int[8][2];
+    int count = 0;
+    for(int i = 0; i < 8; i++){
+        int newRow = row + rowOffsets[i];
+        int newCol = col + colOffsets[i];
+        //Checks if outside board
+        if (newRow < 0 || newRow > 7 || newCol < 0 || newCol > 7){
+            continue;
+        }
+        //Checks if its about to move into its own piece
+        if ((get(row, col) > 0 ) && (get(newRow, newCol) > 0 && get(row, col) > 0)){
+            continue;
+        }
+        if ((get(row, col) < 0 ) && (get(newRow, newCol) < 0 && get(row, col) < 0)){
+            continue;
+        }
+        moves[count][0] = newRow;
+        moves[count][1] = newCol;
+        count++;
+    }
+    return Arrays.copyOf(moves, count);
+}
+
+public int[][] pawnMoves(int row, int col){
+    int[][] moves = new int[4][2];
+    int count = 0;
+    int direction;
+    if(get(row, col) > 0){
+        direction = 1;
+    } else{
+        direction = -1;
+    }
+    int newRow = row + direction;
+    //Regular Pawn movement(One step forward)
+    if (get(newRow, col) == EMPTY){
+        moves[count][0] = newRow;
+        moves[count][1] = col;
+        count++;
+    }
+    //Pawn not moving(Can move two spaces forward)
+    //White
+    if(get(row, col) > 0 && row == 1){
+        if(get(newRow, col) == EMPTY && get(row + 2, col) == EMPTY){
+            moves[count][0] = row + 2;
+            moves[count][1] = col;
+            count++;
+        }
+    }
+    //Black
+    if(get(row, col) < 0 && row == 6){
+        if(get(newRow, col) == EMPTY && get(row - 2, col) == EMPTY){
+            moves[count][0] = row - 2;
+            moves[count][1] = col;
+            count++;
+        }
+    }
+    //White captures diagonally
+    if(get(row, col) > 0 && col + 1 <= 7 && get(newRow, col + 1) <0){
+        moves[count][0] = newRow;
+        moves[count][1] = col + 1;
+        count++;
+    }
+    if (get(row, col) > 0 && col - 1 >= 0 && get(newRow, col - 1) <0 ){
+        moves[count][0] = newRow;
+        moves[count][1] = col - 1;
+        count++;
+    }
+    //Black captures diagonally
+    if(get(row, col) < 0 && col + 1 <= 7 && get(newRow, col + 1) >0){
+        moves[count][0] = newRow;
+        moves[count][1] = col + 1;
+        count++;
+    }
+    if (get(row, col) < 0 && col - 1 >= 0 && get(newRow, col - 1) >0 ){
+        moves[count][0] = newRow;
+        moves[count][1] = col - 1;
+        count++;
+    }
+    return Arrays.copyOf(moves, count);
+}
+
+
+
 public static void main(String[] args){
-        Board b = new Board();
-        b.initBoard();
-        b.printBoard();
-        int[][] moves = b.kingMoves(0, 4);
-        for(int i = 0; i < moves.length; i++){
-            System.out.println("Move: " + moves[i][0] + ", " + moves[i][1]);
+        Scanner scanner = new Scanner(System.in);
+        System.out.println("Enter move (fromRow fromCol toRow toCol):");
+        int fromRow = scanner.nextInt();
+        int fromCol = scanner.nextInt();
+        int toRow = scanner.nextInt();
+        int toCol = scanner.nextInt();
+        Board b3 = new Board();
+        b3.set(1, 4, PAWN);
+        int[][] moves2 = b3.pawnMoves(1, 4);
+        System.out.println("Pawn moves: " + moves2.length);
+        for(int i = 0; i < moves2.length; i++){
+            System.out.println("Move: " + moves2[i][0] + ", " + moves2[i][1]);
         }
     }
 }

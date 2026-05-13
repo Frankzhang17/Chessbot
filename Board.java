@@ -3,6 +3,7 @@ import java.util.Scanner;
 
 public class Board{
     int [] squares = new int[64];
+    boolean whiteTurn = true;
     // Convert rank + file to a flat index
     public int index(int row, int col){
         return row * 8 + col;
@@ -305,22 +306,124 @@ public int[][] pawnMoves(int row, int col){
     }
     return Arrays.copyOf(moves, count);
 }
+//Checks if the move is a valid move
+    public boolean makeMove(int fromRow, int fromCol, int toRow, int toCol){
+        int piece = get(fromRow, fromCol);
+        int [][] validMoves = new int[0][2];
+        
+
+        if(piece == PAWN || piece == -PAWN){
+            validMoves = pawnMoves(fromRow, fromCol);
+        }else if (piece == ROOK || piece == -ROOK) {
+            validMoves = rookMoves(fromRow, fromCol);
+        }else if (piece == KNIGHT || piece == -KNIGHT) {
+            validMoves = knightMoves(fromRow, fromCol);
+        }else if (piece == BISHOP || piece == -BISHOP) {
+            validMoves = bishopMoves(fromRow, fromCol);
+        }else if (piece == QUEEN || piece == -QUEEN) {
+            validMoves = queenMoves(fromRow, fromCol);
+        }else if (piece == KING || piece == -KING) {
+            validMoves = kingMoves(fromRow, fromCol);
+        }
+        
+        //Check for whos turn it is
+        if (whiteTurn && piece < 0){
+            return false;
+        }
+        if (!whiteTurn && piece > 0){
+            return false;
+        }
+
+
+        for(int i = 0; i <validMoves.length; i++){
+            //check if move is valid
+            if(validMoves[i][0] == toRow && validMoves[i][1] == toCol){
+                set(toRow, toCol, get(fromRow, fromCol));
+                set(fromRow, fromCol, EMPTY);
+                whiteTurn = !whiteTurn;
+                return true;
+            }
+            
+        }
+        return false;
+        
+
+    }
+
+    public boolean isInCheck(boolean white){
+        int kingRow = -1;
+        int kingCol = -1;
+
+        for(int row = 0; row < 8 ; row ++){
+            for(int col = 0; col <8; col++){
+                if(white && get(row, col) == KING){
+                    kingRow = row;
+                    kingCol = col;
+                }
+                if (!white && get(row, col) == -KING){
+                    kingRow = row;
+                    kingCol = col;
+                }
+            }
+            
+        }
+
+        for (int row = 0; row < 8 ; row ++){
+            for(int col = 0; col <8; col++){
+                int piece = get(row, col);
+                int[][] enemyMoves = new int[0][2];
+
+                if(white && piece < 0 || !white && piece > 0){
+                    if(piece == PAWN || piece == -PAWN){
+                        enemyMoves = pawnMoves(row, col);
+                    }else if (piece == ROOK || piece == -ROOK) {
+                        enemyMoves = rookMoves(row, col);
+                    }else if (piece == KNIGHT || piece == -KNIGHT) {
+                        enemyMoves = knightMoves(row, col);
+                    }else if (piece == BISHOP || piece == -BISHOP) {
+                        enemyMoves = bishopMoves(row, col);
+                    }else if (piece == QUEEN || piece == -QUEEN) {
+                        enemyMoves = queenMoves(row, col);
+                    }else if (piece == KING || piece == -KING) {
+                        enemyMoves = kingMoves(row, col);
+                    }
+                }
+                for(int i = 0; i < enemyMoves.length; i++){
+                    if(enemyMoves[i][0] == kingRow && enemyMoves[i][1] == kingCol){
+                        return true;
+                    }
+                }
+            }
+
+        }
+        return false;
+    }
 
 
 
-public static void main(String[] args){
+    public static void main(String[] args){
         Scanner scanner = new Scanner(System.in);
-        System.out.println("Enter move (fromRow fromCol toRow toCol):");
-        int fromRow = scanner.nextInt();
-        int fromCol = scanner.nextInt();
-        int toRow = scanner.nextInt();
-        int toCol = scanner.nextInt();
-        Board b3 = new Board();
-        b3.set(1, 4, PAWN);
-        int[][] moves2 = b3.pawnMoves(1, 4);
-        System.out.println("Pawn moves: " + moves2.length);
-        for(int i = 0; i < moves2.length; i++){
-            System.out.println("Move: " + moves2[i][0] + ", " + moves2[i][1]);
+        Board b = new Board();
+        b.initBoard();
+    
+        while(true){
+            b.printBoard();
+            System.out.println(b.whiteTurn ? "White's turn" : "Black's turn");
+            System.out.println("Enter move (fromRow fromCol toRow toCol):");
+            int fromRow = scanner.nextInt();
+            int fromCol = scanner.nextInt();
+            int toRow = scanner.nextInt();
+            int toCol = scanner.nextInt();
+        
+            boolean success = b.makeMove(fromRow, fromCol, toRow, toCol);
+            if(success){
+                System.out.println("Move made!");
+                if(b.isInCheck(true))  System.out.println("White is in check!");
+                if(b.isInCheck(false)) System.out.println("Black is in check!");
+            } else {
+                System.out.println("Invalid move!");
+            }
         }
     }
 }
+

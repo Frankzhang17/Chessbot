@@ -4,6 +4,9 @@ import java.util.Scanner;
 public class Board{
     int [] squares = new int[64];
     boolean whiteTurn = true;
+
+    int enPassantCol = -1;
+    int enPassantRow = -1;
     // Convert rank + file to a flat index
     public int index(int row, int col){
         return row * 8 + col;
@@ -250,7 +253,7 @@ public int[][] knightMoves(int row, int col){
 }
 
 public int[][] pawnMoves(int row, int col){
-    int[][] moves = new int[4][2];
+    int[][] moves = new int[6][2];
     int count = 0;
     int direction;
     if(get(row, col) > 0){
@@ -304,6 +307,23 @@ public int[][] pawnMoves(int row, int col){
         moves[count][1] = col - 1;
         count++;
     }
+    //En passant for white
+    if(get(row, col) > 0 && enPassantRow != -1){
+        if(row + 1 == enPassantRow && Math.abs(col - enPassantCol) == 1){
+            moves[count][0] = enPassantRow;
+            moves[count][1] = enPassantCol;
+            count++;
+        }
+    }
+    //En passant for black
+    if(get(row, col) < 0 && enPassantRow != -1){
+        if(row - 1 == enPassantRow && Math.abs(col - enPassantCol) == 1){
+            moves[count][0] = enPassantRow;
+            moves[count][1] = enPassantCol;
+            count++;
+        }
+    }
+
     return Arrays.copyOf(moves, count);
 }
 //Checks if the move is a valid move
@@ -338,16 +358,34 @@ public int[][] pawnMoves(int row, int col){
         for(int i = 0; i <validMoves.length; i++){
             //check if move is valid
             if(validMoves[i][0] == toRow && validMoves[i][1] == toCol){
+                if(leavesKingInCheck(fromRow, fromCol, toRow, toCol)){
+                    return false;
+                }
+
+                boolean isEnPassant = (piece == PAWN || piece == -PAWN) && toCol == enPassantCol && toRow == enPassantRow;
+
                 set(toRow, toCol, get(fromRow, fromCol));
                 set(fromRow, fromCol, EMPTY);
+                // Remove the captured pawn if en passant
+                if(isEnPassant){
+                    set(fromRow, toCol, EMPTY);
+                }
+
+                if((piece == PAWN || piece == -PAWN) && Math.abs(toRow - fromRow) == 2){
+                    enPassantRow = (fromRow + toRow) / 2;
+                    enPassantCol = toCol;
+                } else {
+                    enPassantRow = -1;
+                    enPassantCol = -1;
+                }
+
+
                 whiteTurn = !whiteTurn;
                 return true;
             }
             
         }
         return false;
-        
-
     }
 
     public boolean isInCheck(boolean white){
@@ -399,6 +437,76 @@ public int[][] pawnMoves(int row, int col){
         return false;
     }
 
+    public boolean leavesKingInCheck(int fromRow, int fromCol, int toRow, int toCol){
+        int movingPiece = get(fromRow, fromCol);
+        int capturedPiece = get(toRow, toCol);
+
+        set(toRow, toCol, movingPiece);
+        set(fromRow, fromCol, EMPTY);
+
+        boolean inCheck = isInCheck(movingPiece > 0);
+
+        set(fromRow, fromCol, movingPiece);
+        set(toRow, toCol, capturedPiece);
+
+        return inCheck;
+    }
+
+    public boolean isCheckmate(boolean white){
+        if(!isInCheck(white)){
+            return false;
+        }
+
+        for (int row = 0; row < 8; row++){
+            for(int col = 0; col < 8; col++){
+                int piece = get(row, col);
+
+                if (white && piece <= 0) continue;
+                if (!white && piece >= 0) continue;
+
+                int[][] moves = new int[0][2];
+                if (piece == PAWN || piece == -PAWN)     moves = pawnMoves(row, col);
+                else if (piece == ROOK || piece == -ROOK)     moves = rookMoves(row, col);
+                else if (piece == KNIGHT || piece == -KNIGHT) moves = knightMoves(row, col);
+                else if (piece == BISHOP || piece == -BISHOP) moves = bishopMoves(row, col);
+                else if (piece == QUEEN || piece == -QUEEN)   moves = queenMoves(row, col);
+                else if (piece == KING || piece == -KING)     moves = kingMoves(row, col);
+
+                for (int i = 0; i < moves.length; i++) {
+                    if (!leavesKingInCheck(row, col, moves[i][0], moves[i][1])) {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        return true;
+    }
+    public boolean isStalemate(boolean white){
+        if (isInCheck(white)) return false;
+        for (int row = 0; row < 8; row++) {
+            for (int col = 0; col < 8; col++) {
+                int piece = get(row, col);
+                if (white && piece <= 0) continue;
+                if (!white && piece >= 0) continue;
+
+                int[][] moves = new int[0][2];
+                if (piece == PAWN || piece == -PAWN)         moves = pawnMoves(row, col);
+                else if (piece == ROOK || piece == -ROOK)     moves = rookMoves(row, col);
+                else if (piece == KNIGHT || piece == -KNIGHT) moves = knightMoves(row, col);
+                else if (piece == BISHOP || piece == -BISHOP) moves = bishopMoves(row, col);
+                else if (piece == QUEEN || piece == -QUEEN)   moves = queenMoves(row, col);
+                else if (piece == KING || piece == -KING)     moves = kingMoves(row, col);
+
+                for (int i = 0; i < moves.length; i++) {
+                    if (!leavesKingInCheck(row, col, moves[i][0], moves[i][1])) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
 
 
     public static void main(String[] args){
@@ -420,6 +528,11 @@ public int[][] pawnMoves(int row, int col){
                 System.out.println("Move made!");
                 if(b.isInCheck(true))  System.out.println("White is in check!");
                 if(b.isInCheck(false)) System.out.println("Black is in check!");
+
+                if (b.isCheckmate(true))  { System.out.println("Checkmate! Black wins!"); break; }
+                if (b.isCheckmate(false)) { System.out.println("Checkmate! White wins!"); break; }
+                if (b.isStalemate(true)) {System.out.println("Stalemate! Its a draw!"); break; }
+                if (b.isStalemate(false)) {System.out.println("Stalemate! Its a draw!"); break; }
             } else {
                 System.out.println("Invalid move!");
             }

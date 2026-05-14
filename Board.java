@@ -9,6 +9,8 @@ public class Board{
     int enPassantCol = -1;
     int enPassantRow = -1;
 
+    int fiftyMoveCounter = 0;
+
 
     //Castling stuff 
     boolean whiteKingMoved = false;
@@ -399,6 +401,8 @@ public int[][] pawnMoves(int row, int col){
 
                 boolean isEnPassant = (piece == PAWN || piece == -PAWN) && toCol == enPassantCol && toRow == enPassantRow;
 
+                int capturedPiece = get(toRow, toCol);
+
                 set(toRow, toCol, get(fromRow, fromCol));
                 set(fromRow, fromCol, EMPTY);
                 //Castling stuff
@@ -432,28 +436,33 @@ public int[][] pawnMoves(int row, int col){
                 if (piece == -ROOK && fromRow == 7 && fromCol == 7) blackRookMovedRight = true;
 
                 if (piece == PAWN && toRow == 7) {
-                System.out.println("Promote pawn! Enter piece (Q, R, B, N):");
-                String choice = scanner.next().toUpperCase();
-                switch(choice) {
-                    case "Q": set(toRow, toCol, QUEEN);  break;
-                    case "R": set(toRow, toCol, ROOK);   break;
-                    case "B": set(toRow, toCol, BISHOP); break;
-                    case "N": set(toRow, toCol, KNIGHT); break;
-                    default:  set(toRow, toCol, QUEEN);  break; // default to queen
+                    System.out.println("Promote pawn! Enter piece (Q, R, B, N):");
+                    String choice = scanner.next().toUpperCase();
+                    switch(choice) {
+                        case "Q": set(toRow, toCol, QUEEN);  break;
+                        case "R": set(toRow, toCol, ROOK);   break;
+                        case "B": set(toRow, toCol, BISHOP); break;
+                        case "N": set(toRow, toCol, KNIGHT); break;
+                        default:  set(toRow, toCol, QUEEN);  break; // default to queen
+                    }
                 }
-            }
-            if (piece == -PAWN && toRow == 0) {
-                System.out.println("Promote pawn! Enter piece (Q, R, B, N):");
-                String choice = scanner.next().toUpperCase();
-                switch(choice) {
-                    case "Q": set(toRow, toCol, -QUEEN);  break;
-                    case "R": set(toRow, toCol, -ROOK);   break;
-                    case "B": set(toRow, toCol, -BISHOP); break;
-                    case "N": set(toRow, toCol, -KNIGHT); break;
-                    default:  set(toRow, toCol, -QUEEN);  break;
+                if (piece == -PAWN && toRow == 0) {
+                    System.out.println("Promote pawn! Enter piece (Q, R, B, N):");
+                    String choice = scanner.next().toUpperCase();
+                    switch(choice) {
+                        case "Q": set(toRow, toCol, -QUEEN);  break;
+                        case "R": set(toRow, toCol, -ROOK);   break;
+                        case "B": set(toRow, toCol, -BISHOP); break;
+                        case "N": set(toRow, toCol, -KNIGHT); break;
+                        default:  set(toRow, toCol, -QUEEN);  break;
+                    }
                 }
-            }
 
+                if (piece == PAWN || piece == -PAWN || capturedPiece != EMPTY) {
+                    fiftyMoveCounter = 0;  // reset on pawn move or capture
+                } else {
+                    fiftyMoveCounter++;    // increment otherwise
+                }
 
                 whiteTurn = !whiteTurn;
                 return true;
@@ -741,6 +750,7 @@ public int[][] pawnMoves(int row, int col){
                 if (b.isCheckmate(false)) { System.out.println("Checkmate! White wins!"); break; }
                 if (b.isStalemate(true)) {System.out.println("Stalemate! Its a draw!"); break; }
                 if (b.isStalemate(false)) {System.out.println("Stalemate! Its a draw!"); break; }
+                if (b.fiftyMoveCounter >= 100) { System.out.println("Draw! Fifty move rule!"); break; }
             } else {
                 System.out.println("Invalid move!");
             }

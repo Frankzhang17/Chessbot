@@ -7,6 +7,15 @@ public class Board{
 
     int enPassantCol = -1;
     int enPassantRow = -1;
+
+
+    //Castling stuff 
+    boolean whiteKingMoved = false;
+    boolean blackKingMoved = false;
+    boolean whiteRookMovedLeft = false;
+    boolean whiteRookMovedRight = false;
+    boolean blackRookMovedLeft = false;
+    boolean blackRookMovedRight = false;
     // Convert rank + file to a flat index
     public int index(int row, int col){
         return row * 8 + col;
@@ -89,6 +98,7 @@ public int[][] kingMoves(int row, int col){
     int[] colOffsets = {-1,  0,  1, -1,  1, -1,  0,  1};
     int[][] moves = new int[8][2];
     int count = 0;
+    
     for(int i = 0; i < 8; i++){
         int newRow = row + rowOffsets[i];
         int newCol = col + colOffsets[i];
@@ -107,8 +117,30 @@ public int[][] kingMoves(int row, int col){
         moves[count][1] = newCol;
         count++;
     }
+    int[][] castling = castlingMoves(row, col);
+    int[][] allMoves = new int[count + castling.length][2];
+    for (int i = 0; i < count; i++) allMoves[i] = moves[i];
+    for (int i = 0; i < castling.length; i++) allMoves[count + i] = castling[i];
+    return allMoves;
+}
+public int[][] kingMovesOnly(int row, int col){
+    int[] rowOffsets = {-1, -1, -1,  0,  0,  1,  1,  1};
+    int[] colOffsets = {-1,  0,  1, -1,  1, -1,  0,  1};
+    int[][] moves = new int[8][2];
+    int count = 0;
+    for(int i = 0; i < 8; i++){
+        int newRow = row + rowOffsets[i];
+        int newCol = col + colOffsets[i];
+        if (newRow < 0 || newRow > 7 || newCol < 0 || newCol > 7) continue;
+        if ((get(row, col) > 0) && (get(newRow, newCol) > 0)) continue;
+        if ((get(row, col) < 0) && (get(newRow, newCol) < 0)) continue;
+        moves[count][0] = newRow;
+        moves[count][1] = newCol;
+        count++;
+    }
     return Arrays.copyOf(moves, count);
 }
+
 public int[][] rookMoves(int row, int col){
     int[][]moves = new int [14][2];
     int count = 0;
@@ -345,6 +377,7 @@ public int[][] pawnMoves(int row, int col){
         }else if (piece == KING || piece == -KING) {
             validMoves = kingMoves(fromRow, fromCol);
         }
+
         
         //Check for whos turn it is
         if (whiteTurn && piece < 0){
@@ -366,6 +399,17 @@ public int[][] pawnMoves(int row, int col){
 
                 set(toRow, toCol, get(fromRow, fromCol));
                 set(fromRow, fromCol, EMPTY);
+                //Castling stuff
+                if (piece == KING && fromRow == 0 && fromCol == 4) {
+                    if (toCol == 6) { set(0, 5, ROOK);  set(0, 7, EMPTY); }
+                    else if (toCol == 2) { set(0, 3, ROOK);  set(0, 0, EMPTY); }
+                }
+                if (piece == -KING && fromRow == 7 && fromCol == 4) {
+                    if (toCol == 6) { set(7, 5, -ROOK); set(7, 7, EMPTY); }
+                    else if (toCol == 2) { set(7, 3, -ROOK); set(7, 0, EMPTY); }
+                }
+
+
                 // Remove the captured pawn if en passant
                 if(isEnPassant){
                     set(fromRow, toCol, EMPTY);
@@ -378,6 +422,12 @@ public int[][] pawnMoves(int row, int col){
                     enPassantRow = -1;
                     enPassantCol = -1;
                 }
+                if (piece == KING)  whiteKingMoved = true;
+                if (piece == -KING) blackKingMoved = true;
+                if (piece == ROOK  && fromRow == 0 && fromCol == 0) whiteRookMovedLeft = true;
+                if (piece == ROOK  && fromRow == 0 && fromCol == 7) whiteRookMovedRight = true;
+                if (piece == -ROOK && fromRow == 7 && fromCol == 0) blackRookMovedLeft = true;
+                if (piece == -ROOK && fromRow == 7 && fromCol == 7) blackRookMovedRight = true;
 
 
                 whiteTurn = !whiteTurn;
@@ -423,7 +473,7 @@ public int[][] pawnMoves(int row, int col){
                     }else if (piece == QUEEN || piece == -QUEEN) {
                         enemyMoves = queenMoves(row, col);
                     }else if (piece == KING || piece == -KING) {
-                        enemyMoves = kingMoves(row, col);
+                        enemyMoves = kingMovesOnly(row, col);
                     }
                 }
                 for(int i = 0; i < enemyMoves.length; i++){
@@ -506,6 +556,91 @@ public int[][] pawnMoves(int row, int col){
             }
         }
         return true;
+    }
+    public int[][] castlingMoves(int row, int col) {
+        int[][] moves = new int[2][2];
+        int count = 0;
+        boolean white = get(row, col) > 0;
+
+        // Can't castle while in check
+        if (isInCheck(white)) return new int[0][2];
+
+        if (white && !whiteKingMoved) {
+            // White kingside (right)
+            if (!whiteRookMovedRight
+                    && get(0, 5) == EMPTY
+                    && get(0, 6) == EMPTY
+                    && !isInCheck(true)
+                    && !squareAttacked(0, 5, true)
+                    && !squareAttacked(0, 6, true)) {
+                moves[count][0] = 0;
+                moves[count][1] = 6;
+                count++;
+            }
+            // White queenside (left)
+            if (!whiteRookMovedLeft
+                    && get(0, 1) == EMPTY
+                    && get(0, 2) == EMPTY
+                    && get(0, 3) == EMPTY
+                    && !squareAttacked(0, 2, true)
+                    && !squareAttacked(0, 3, true)) {
+                moves[count][0] = 0;
+                moves[count][1] = 2;
+                count++;
+            }
+        }
+
+        if (!white && !blackKingMoved) {
+            // Black kingside (right)
+            if (!blackRookMovedRight
+                    && get(7, 5) == EMPTY
+                    && get(7, 6) == EMPTY
+                    && !isInCheck(false)
+                    && !squareAttacked(7, 5, false)
+                    && !squareAttacked(7, 6, false)) {
+                moves[count][0] = 7;
+                moves[count][1] = 6;
+                count++;
+            }
+            // Black queenside (left)
+            if (!blackRookMovedLeft
+                    && get(7, 1) == EMPTY
+                    && get(7, 2) == EMPTY
+                    && get(7, 3) == EMPTY
+                    && !squareAttacked(7, 2, false)
+                    && !squareAttacked(7, 3, false)) {
+                moves[count][0] = 7;
+                moves[count][1] = 2;
+                count++;
+            }
+        }
+
+        return Arrays.copyOf(moves, count);
+    }
+
+    public boolean squareAttacked(int targetRow, int targetCol, boolean white) {
+        for (int row = 0; row < 8; row++) {
+            for (int col = 0; col < 8; col++) {
+                int piece = get(row, col);
+                if (white && piece >= 0) continue;  // skip friendly/empty
+                if (!white && piece <= 0) continue;
+
+                int[][] moves = new int[0][2];
+                if (piece == PAWN || piece == -PAWN)         moves = pawnMoves(row, col);
+                else if (piece == ROOK || piece == -ROOK)     moves = rookMoves(row, col);
+                else if (piece == KNIGHT || piece == -KNIGHT) moves = knightMoves(row, col);
+                else if (piece == BISHOP || piece == -BISHOP) moves = bishopMoves(row, col);
+                else if (piece == QUEEN || piece == -QUEEN)   moves = queenMoves(row, col);
+                else if (piece == KING || piece == -KING)     moves = kingMovesOnly(row, col);
+
+                for (int i = 0; i < moves.length; i++) {
+                    if (moves[i][0] == targetRow && moves[i][1] == targetCol) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
 

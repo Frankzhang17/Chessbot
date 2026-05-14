@@ -43,36 +43,32 @@ public class Board{
     static final int KING = 6;
 
     public void initBoard(){
-        // //set Pawns
-        // for(int i = 0; i<= 7; i++){
-        //     set(1, i, PAWN);
-        //     set(6, i, -PAWN);
-        // }
-        // //Set Rooks
-        // set(0, 0, ROOK);
-        // set(0, 7, ROOK);
-        // set(7, 0, -ROOK);
-        // set(7, 7, -ROOK);
-        // //Set knight
-        // set(0, 1, KNIGHT);
-        // set(0, 6, KNIGHT);
-        // set(7, 1, -KNIGHT);
-        // set(7, 6, -KNIGHT);
-        // //Set Bishop
-        // set(0, 2, BISHOP);
-        // set(0, 5, BISHOP);
-        // set(7, 2, -BISHOP);
-        // set(7, 5, -BISHOP);
-        // //Set Queen
-        // set(0, 3, QUEEN);
-        // set(7, 3, -QUEEN);
-        // //Set King
-        // set(0, 4, KING);
-        // set(7, 4, -KING);
-        Arrays.fill(squares, EMPTY);
+        //set Pawns
+        for(int i = 0; i<= 7; i++){
+            set(1, i, PAWN);
+            set(6, i, -PAWN);
+        }
+        //Set Rooks
+        set(0, 0, ROOK);
+        set(0, 7, ROOK);
+        set(7, 0, -ROOK);
+        set(7, 7, -ROOK);
+        //Set knight
+        set(0, 1, KNIGHT);
+        set(0, 6, KNIGHT);
+        set(7, 1, -KNIGHT);
+        set(7, 6, -KNIGHT);
+        //Set Bishop
+        set(0, 2, BISHOP);
+        set(0, 5, BISHOP);
+        set(7, 2, -BISHOP);
+        set(7, 5, -BISHOP);
+        //Set Queen
+        set(0, 3, QUEEN);
+        set(7, 3, -QUEEN);
+        //Set King
         set(0, 4, KING);
         set(7, 4, -KING);
-        set(0, 0, ROOK);
     }
     public void printBoard(){
     for(int row = 7; row >= 0; row--){

@@ -4,6 +4,7 @@ import java.util.Scanner;
 public class Board{
     int [] squares = new int[64];
     boolean whiteTurn = true;
+    Scanner scanner = new Scanner(System.in);
 
     int enPassantCol = -1;
     int enPassantRow = -1;
@@ -65,6 +66,7 @@ public class Board{
         //Set King
         set(0, 4, KING);
         set(7, 4, -KING);
+
     }
     public void printBoard(){
     for(int row = 7; row >= 0; row--){
@@ -429,6 +431,29 @@ public int[][] pawnMoves(int row, int col){
                 if (piece == -ROOK && fromRow == 7 && fromCol == 0) blackRookMovedLeft = true;
                 if (piece == -ROOK && fromRow == 7 && fromCol == 7) blackRookMovedRight = true;
 
+                if (piece == PAWN && toRow == 7) {
+                System.out.println("Promote pawn! Enter piece (Q, R, B, N):");
+                String choice = scanner.next().toUpperCase();
+                switch(choice) {
+                    case "Q": set(toRow, toCol, QUEEN);  break;
+                    case "R": set(toRow, toCol, ROOK);   break;
+                    case "B": set(toRow, toCol, BISHOP); break;
+                    case "N": set(toRow, toCol, KNIGHT); break;
+                    default:  set(toRow, toCol, QUEEN);  break; // default to queen
+                }
+            }
+            if (piece == -PAWN && toRow == 0) {
+                System.out.println("Promote pawn! Enter piece (Q, R, B, N):");
+                String choice = scanner.next().toUpperCase();
+                switch(choice) {
+                    case "Q": set(toRow, toCol, -QUEEN);  break;
+                    case "R": set(toRow, toCol, -ROOK);   break;
+                    case "B": set(toRow, toCol, -BISHOP); break;
+                    case "N": set(toRow, toCol, -KNIGHT); break;
+                    default:  set(toRow, toCol, -QUEEN);  break;
+                }
+            }
+
 
                 whiteTurn = !whiteTurn;
                 return true;
@@ -645,18 +670,18 @@ public int[][] pawnMoves(int row, int col){
 
 
     public static void main(String[] args){
-        Scanner scanner = new Scanner(System.in);
         Board b = new Board();
         b.initBoard();
+        
     
         while(true){
             b.printBoard();
             System.out.println(b.whiteTurn ? "White's turn" : "Black's turn");
             System.out.println("Enter move (fromRow fromCol toRow toCol):");
-            int fromRow = scanner.nextInt();
-            int fromCol = scanner.nextInt();
-            int toRow = scanner.nextInt();
-            int toCol = scanner.nextInt();
+            int fromRow = b.scanner.nextInt();
+            int fromCol = b.scanner.nextInt();
+            int toRow = b.scanner.nextInt();
+            int toCol = b.scanner.nextInt();
         
             boolean success = b.makeMove(fromRow, fromCol, toRow, toCol);
             if(success){

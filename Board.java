@@ -667,12 +667,60 @@ public int[][] pawnMoves(int row, int col){
         }
         return false;
     }
+    public boolean isInsufficientMaterial(){
+        int whiteBishops = 0, whiteKnights = 0, whitePawns = 0;
+        int blackBishops = 0, blackKnights = 0, blackPawns = 0;
+        int whiteOther = 0, blackOther = 0;
+        int whiteBishopColor = -1, blackBishopColor = -1;
 
+        for (int row = 0; row <8; row++){
+            for (int col = 0; col < 8; col++){
+                int piece = get(row, col);
+                int squareColor = (row + col) % 2; // 0 or 1
+
+                switch (piece) {
+                    case PAWN:    whitePawns++;   break;
+                    case KNIGHT:  whiteKnights++; break;
+                    case BISHOP:  whiteBishops++; whiteBishopColor = squareColor; break;
+                    case ROOK: case QUEEN: whiteOther++; break;
+                    case -PAWN:   blackPawns++;   break;
+                    case -KNIGHT: blackKnights++; break;
+                    case -BISHOP: blackBishops++; blackBishopColor = squareColor; break;
+                    case -ROOK: case -QUEEN: blackOther++; break;    
+                }
+            }
+        }
+        // If anyone has pawns, rooks, or queens — not insufficient
+        if (whitePawns > 0 || blackPawns > 0) return false;
+        if (whiteOther > 0 || blackOther > 0) return false;
+
+        // King vs King
+        if (whiteKnights == 0 && whiteBishops == 0 && blackKnights == 0 && blackBishops == 0) return true;
+
+        // King + Knight vs King
+        if (whiteKnights == 1 && whiteBishops == 0 && blackKnights == 0 && blackBishops == 0) return true;
+        if (blackKnights == 1 && blackBishops == 0 && whiteKnights == 0 && whiteBishops == 0) return true;
+
+        // King + Bishop vs King
+        if (whiteBishops == 1 && whiteKnights == 0 && blackKnights == 0 && blackBishops == 0) return true;
+        if (blackBishops == 1 && blackKnights == 0 && whiteKnights == 0 && whiteBishops == 0) return true;
+
+        // King + Bishop vs King + Bishop (same color bishops)
+        if (whiteBishops == 1 && blackBishops == 1 && whiteKnights == 0 && blackKnights == 0) {
+            if (whiteBishopColor == blackBishopColor) return true;
+        }
+
+        return false;
+    }
 
     public static void main(String[] args){
         Board b = new Board();
         b.initBoard();
         
+        if (b.isInsufficientMaterial()) {
+            System.out.println("Draw! Insufficient material!"); 
+            return;
+        }
     
         while(true){
             b.printBoard();

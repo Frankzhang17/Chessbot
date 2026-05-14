@@ -1,3 +1,4 @@
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Scanner;
 
@@ -11,7 +12,7 @@ public class Board{
 
     int fiftyMoveCounter = 0;
 
-
+    ArrayList<int[]> boardHistory = new ArrayList<>();
     //Castling stuff 
     boolean whiteKingMoved = false;
     boolean blackKingMoved = false;
@@ -42,33 +43,36 @@ public class Board{
     static final int KING = 6;
 
     public void initBoard(){
-        //set Pawns
-        for(int i = 0; i<= 7; i++){
-            set(1, i, PAWN);
-            set(6, i, -PAWN);
-        }
-        //Set Rooks
-        set(0, 0, ROOK);
-        set(0, 7, ROOK);
-        set(7, 0, -ROOK);
-        set(7, 7, -ROOK);
-        //Set knight
-        set(0, 1, KNIGHT);
-        set(0, 6, KNIGHT);
-        set(7, 1, -KNIGHT);
-        set(7, 6, -KNIGHT);
-        //Set Bishop
-        set(0, 2, BISHOP);
-        set(0, 5, BISHOP);
-        set(7, 2, -BISHOP);
-        set(7, 5, -BISHOP);
-        //Set Queen
-        set(0, 3, QUEEN);
-        set(7, 3, -QUEEN);
-        //Set King
+        // //set Pawns
+        // for(int i = 0; i<= 7; i++){
+        //     set(1, i, PAWN);
+        //     set(6, i, -PAWN);
+        // }
+        // //Set Rooks
+        // set(0, 0, ROOK);
+        // set(0, 7, ROOK);
+        // set(7, 0, -ROOK);
+        // set(7, 7, -ROOK);
+        // //Set knight
+        // set(0, 1, KNIGHT);
+        // set(0, 6, KNIGHT);
+        // set(7, 1, -KNIGHT);
+        // set(7, 6, -KNIGHT);
+        // //Set Bishop
+        // set(0, 2, BISHOP);
+        // set(0, 5, BISHOP);
+        // set(7, 2, -BISHOP);
+        // set(7, 5, -BISHOP);
+        // //Set Queen
+        // set(0, 3, QUEEN);
+        // set(7, 3, -QUEEN);
+        // //Set King
+        // set(0, 4, KING);
+        // set(7, 4, -KING);
+        Arrays.fill(squares, EMPTY);
         set(0, 4, KING);
         set(7, 4, -KING);
-
+        set(0, 0, ROOK);
     }
     public void printBoard(){
     for(int row = 7; row >= 0; row--){
@@ -464,6 +468,8 @@ public int[][] pawnMoves(int row, int col){
                     fiftyMoveCounter++;    // increment otherwise
                 }
 
+                boardHistory.add(getBoardSnapshot());
+
                 whiteTurn = !whiteTurn;
                 return true;
             }
@@ -721,10 +727,25 @@ public int[][] pawnMoves(int row, int col){
 
         return false;
     }
+    public int[] getBoardSnapshot() {
+        return Arrays.copyOf(squares, squares.length);
+    }
+
+    public boolean isThreefoldRepetition(){
+        int[] current = getBoardSnapshot();
+        int count = 0;
+        for (int[] snapshot : boardHistory){
+            if(Arrays.equals(snapshot, current)){
+                count++;
+            }
+        }
+        return count >= 3;
+    }
 
     public static void main(String[] args){
         Board b = new Board();
         b.initBoard();
+        b.boardHistory.add(b.getBoardSnapshot());
         
         if (b.isInsufficientMaterial()) {
             System.out.println("Draw! Insufficient material!"); 
@@ -751,6 +772,7 @@ public int[][] pawnMoves(int row, int col){
                 if (b.isStalemate(true)) {System.out.println("Stalemate! Its a draw!"); break; }
                 if (b.isStalemate(false)) {System.out.println("Stalemate! Its a draw!"); break; }
                 if (b.fiftyMoveCounter >= 100) { System.out.println("Draw! Fifty move rule!"); break; }
+                if (b.isThreefoldRepetition()) { System.out.println("Draw! Threefold repetition!"); break; }
             } else {
                 System.out.println("Invalid move!");
             }

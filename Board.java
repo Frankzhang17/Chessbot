@@ -503,13 +503,19 @@ public class Board {
         int movingPiece   = get(fromRow, fromCol);
         int capturedPiece = get(toRow, toCol);
 
+        boolean isEnPassant = (movingPiece == PAWN || movingPiece == -PAWN) && toCol == enPassantCol && toRow == enPassantRow;
+
+        int enPassantCaptured = isEnPassant ? get(fromRow, toCol) : EMPTY;
+
         set(toRow, toCol, movingPiece);
         set(fromRow, fromCol, EMPTY);
+        if (isEnPassant) set(fromRow, toCol, EMPTY);
 
         boolean inCheck = isInCheck(movingPiece > 0);
 
         set(fromRow, fromCol, movingPiece);
         set(toRow, toCol, capturedPiece);
+        if (isEnPassant) set(fromRow, toCol, enPassantCaptured);
 
         return inCheck;
     }
@@ -579,6 +585,7 @@ public class Board {
         if (white && !whiteKingMoved) {
             // White kingside (right)
             if (!whiteRookMovedRight
+                    && get(0, 7) == ROOK
                     && get(0, 5) == EMPTY
                     && get(0, 6) == EMPTY
                     && !isInCheck(true)
@@ -590,6 +597,7 @@ public class Board {
             }
             // White queenside (left)
             if (!whiteRookMovedLeft
+                    && get(0, 0) == ROOK
                     && get(0, 1) == EMPTY
                     && get(0, 2) == EMPTY
                     && get(0, 3) == EMPTY
@@ -604,6 +612,7 @@ public class Board {
         if (!white && !blackKingMoved) {
             // Black kingside (right)
             if (!blackRookMovedRight
+                    && get(7, 7) == -ROOK
                     && get(7, 5) == EMPTY
                     && get(7, 6) == EMPTY
                     && !isInCheck(false)
@@ -615,6 +624,7 @@ public class Board {
             }
             // Black queenside (left)
             if (!blackRookMovedLeft
+                    && get(7, 0) == -ROOK
                     && get(7, 1) == EMPTY
                     && get(7, 2) == EMPTY
                     && get(7, 3) == EMPTY
@@ -700,7 +710,17 @@ public class Board {
     }
 
     public int[] getBoardSnapshot() {
-        return Arrays.copyOf(squares, squares.length);
+        int[] snapshot = Arrays.copyOf(squares, squares.length + 8);
+        // Append extra state after the 64 squares
+        snapshot[64] = whiteTurn ? 1 : 0;
+        snapshot[65] = enPassantCol;
+        snapshot[66] = whiteKingMoved  ? 1 : 0;
+        snapshot[67] = blackKingMoved  ? 1 : 0;
+        snapshot[68] = whiteRookMovedLeft  ? 1 : 0; // split into 4 separate slots
+        snapshot[69] = whiteRookMovedRight ? 1 : 0;
+        snapshot[70] = blackRookMovedLeft  ? 1 : 0;
+        snapshot[71] = blackRookMovedRight ? 1 : 0;
+        return snapshot;
     }
 
     public boolean isThreefoldRepetition() {
@@ -743,6 +763,7 @@ public class Board {
                 if (b.isStalemate(false))      { System.out.println("Stalemate! Its a draw!");      break; }
                 if (b.fiftyMoveCounter >= 100) { System.out.println("Draw! Fifty move rule!");      break; }
                 if (b.isThreefoldRepetition()) { System.out.println("Draw! Threefold repetition!"); break; }
+                if (b.isInsufficientMaterial()) { System.out.println("Draw! Insufficient material!"); break; }
             } else {
                 System.out.println("Invalid move!");
             }

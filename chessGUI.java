@@ -50,6 +50,15 @@ public class chessGUI {
                         boardPanel.repaint();
                     }
                 } else {
+                    if ((board.get(selectedRow, selectedCol) == 1 && row == 7) ||
+                        (board.get(selectedRow, selectedCol) == -1 && row == 0)) {
+                        String[] options = {"Queen", "Rook", "Bishop", "Knight"};
+                        int choice = JOptionPane.showOptionDialog(frame, "Promote pawn!",
+                            "Promotion", JOptionPane.DEFAULT_OPTION,
+                            JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
+                        int[] pieces = {5, 4, 3, 2};
+                        board.promotionChoice = pieces[choice];
+                    }
                     boolean moved = board.makeMove(selectedRow, selectedCol, row, col);
                     selectedRow = -1;
                     selectedCol = -1;

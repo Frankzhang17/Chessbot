@@ -15,6 +15,8 @@ public class Board {
 
     ArrayList<int[]> boardHistory = new ArrayList<>();
 
+    public int promotionChoice = QUEEN;
+
     // Castling stuff
     boolean whiteKingMoved      = false;
     boolean blackKingMoved      = false;
@@ -426,28 +428,8 @@ public class Board {
                 if (piece == -ROOK && fromRow == 7 && fromCol == 0) blackRookMovedLeft  = true;
                 if (piece == -ROOK && fromRow == 7 && fromCol == 7) blackRookMovedRight = true;
 
-                if (piece == PAWN && toRow == 7) {
-                    System.out.println("Promote pawn! Enter piece (Q, R, B, N):");
-                    String choice = scanner.next().toUpperCase();
-                    switch (choice) {
-                        case "Q": set(toRow, toCol, QUEEN);  break;
-                        case "R": set(toRow, toCol, ROOK);   break;
-                        case "B": set(toRow, toCol, BISHOP); break;
-                        case "N": set(toRow, toCol, KNIGHT); break;
-                        default:  set(toRow, toCol, QUEEN);  break; // default to queen
-                    }
-                }
-                if (piece == -PAWN && toRow == 0) {
-                    System.out.println("Promote pawn! Enter piece (Q, R, B, N):");
-                    String choice = scanner.next().toUpperCase();
-                    switch (choice) {
-                        case "Q": set(toRow, toCol, -QUEEN);  break;
-                        case "R": set(toRow, toCol, -ROOK);   break;
-                        case "B": set(toRow, toCol, -BISHOP); break;
-                        case "N": set(toRow, toCol, -KNIGHT); break;
-                        default:  set(toRow, toCol, -QUEEN);  break;
-                    }
-                }
+                if (piece == PAWN  && toRow == 7) set(toRow, toCol,  promotionChoice);
+                if (piece == -PAWN && toRow == 0) set(toRow, toCol, -promotionChoice);
 
                 if (piece == PAWN || piece == -PAWN || capturedPiece != EMPTY) {
                     fiftyMoveCounter = 0;  // reset on pawn move or capture
@@ -731,6 +713,8 @@ public class Board {
         }
         return count >= 3;
     }
+
+
 
     public static void main(String[] args) {
         Board b = new Board();

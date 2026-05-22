@@ -18,8 +18,26 @@ public class chessGUI {
     static int selectedCol = -1;
     static int[][] validMoves = new int[0][2];
     static boolean flipped = false;
+    static MCTS engine = null;
+    static boolean enginePlaysWhite = false;
+
 
     public static void main(String[] args) {
+        String[] options = {"Play as White", "Play as Black"};
+        int choice = JOptionPane.showOptionDialog(null, "Choose your side",
+        "Chess", JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
+        null, options, options[0]);
+
+        if (choice == 0) {
+            // Human is white, engine is black
+            engine = new MCTS(false);
+            enginePlaysWhite = false;
+        } else {
+            // Human is black, engine is white
+            engine = new MCTS(true);
+            enginePlaysWhite = true;
+        }
+
         loadImages();
         board.initBoard();
 
@@ -72,6 +90,13 @@ public class chessGUI {
                         else if (board.isStalemate(false))  JOptionPane.showMessageDialog(frame, "Stalemate! Its a draw!");
                         else if (board.isInCheck(true))     JOptionPane.showMessageDialog(frame, "White is in check!");
                         else if (board.isInCheck(false))    JOptionPane.showMessageDialog(frame, "Black is in check!");
+                        else if (engine != null && board.whiteTurn == enginePlaysWhite) {
+                            int[] engineMove = engine.getBestMove(board);
+                            if (engineMove != null) {
+                                board.makeMove(engineMove[0], engineMove[1], engineMove[2], engineMove[3]);
+                                boardPanel.repaint();
+                            }
+                        }
                     }
                 }
             }
@@ -89,6 +114,9 @@ public class chessGUI {
         frame.pack();
         frame.setLocationRelativeTo(null);
         frame.setVisible(true);
+
+
+
     }
 
     private static void drawBoard(Graphics g) {

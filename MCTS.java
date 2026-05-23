@@ -26,6 +26,20 @@ public class MCTS {
             if (best == null || child.visits > best.visits) best = child;
         }
 
+        System.out.println("Engine is thinking...");
+        for (MCTSNode child : root.children) {
+            if (child.move != null) {
+                System.out.printf("Move [%d,%d -> %d,%d] visits: %d wins: %.0f winrate: %.1f%%%n",
+                    child.move[0], child.move[1], child.move[2], child.move[3],
+                    child.visits, child.wins,
+                    child.visits > 0 ? (child.wins / child.visits) * 100 : 0);
+            }
+        }
+        if (best != null) {
+            System.out.printf("Best move: [%d,%d -> %d,%d] with %d visits%n",
+                best.move[0], best.move[1], best.move[2], best.move[3], best.visits);
+        }
+
         return best != null ? best.move : null;
     }
 
@@ -59,30 +73,30 @@ public class MCTS {
     }
 
     public MCTSNode expand(MCTSNode node, Board board) {
-        // Get all legal moves from this position
         ArrayList<int[]> allMoves = getAllMoves(board, board.whiteTurn);
+    
+        if (allMoves.size() == 0) return node;
 
-        for (int[] move : allMoves) {
-            // Check if this move is already a child
-            boolean alreadyExists = false;
+        // If children already exist, just pick the unvisited one with highest UCB
+        if (node.children.size() > 0) {
+            MCTSNode selected = null;
             for (MCTSNode child : node.children) {
-                if (child.move[0] == move[0] && child.move[1] == move[1] &&
-                    child.move[2] == move[2] && child.move[3] == move[3]) {
-                    alreadyExists = true;
-                    break;
-                }
+                if (selected == null || child.getUCB() > selected.getUCB()) selected = child;
             }
-
-            // Add it as a new child if not already there
-            if (!alreadyExists) {
-                MCTSNode child = new MCTSNode(node, move, board.getBoardSnapshot(), board.whiteTurn);
-                node.children.add(child);
-                board.makeMove(move[0], move[1], move[2], move[3]);
-                return child;
-            }
+            board.makeMove(selected.move[0], selected.move[1], selected.move[2], selected.move[3]);
+            return selected;
         }
 
-        return node;
+        // First time visiting this node — add ALL moves as children
+        for (int[] move : allMoves) {
+            MCTSNode child = new MCTSNode(node, move, board.getBoardSnapshot(), board.whiteTurn);
+            node.children.add(child);
+        }
+
+        // Pick a random child to simulate from first
+        MCTSNode selected = node.children.get((int)(Math.random() * node.children.size()));
+        board.makeMove(selected.move[0], selected.move[1], selected.move[2], selected.move[3]);
+        return selected;
     }
 
 
@@ -131,7 +145,9 @@ public class MCTS {
             ArrayList<int[]> moves = getAllMoves(board, board.whiteTurn);
             if (moves.size() == 0) return 0.5;
 
-            int[] move = moves.get((int)(Math.random() * moves.size()));
+            moves.sort((a, b) -> scoreMove(board, b) - scoreMove(board, a));
+            int topN = Math.max(1, moves.size() / 3);
+            int[] move = moves.get((int)(Math.random() * topN));
             board.makeMove(move[0], move[1], move[2], move[3]);
             moveCount++;
         } 
@@ -145,6 +161,33 @@ public class MCTS {
             node.wins += result;
             node = node.parent;
         }
+    }
+
+    public int scoreMove(Board board, int[] move) {
+        int score = 0;
+        int target = board.get(move[2], move[3]);
+
+        // Reward captures based on piece value
+        switch (Math.abs(target)) {
+            case 1: score += 10;  break; // pawn
+            case 2: score += 30;  break; // knight
+            case 3: score += 30;  break; // bishop
+            case 4: score += 50;  break; // rook
+            case 5: score += 90;  break; // queen
+            case 6: score += 900; break; // king
+        }
+
+        // Reward moving pawns forward
+        int piece = board.get(move[0], move[1]);
+        if (piece == 1  && move[2] > move[0]) score += 2; // white pawn forward
+        if (piece == -1 && move[2] < move[0]) score += 2; // black pawn forward
+
+        // Reward controlling the center
+        int toRow = move[2];
+        int toCol = move[3];
+        if (toRow >= 3 && toRow <= 4 && toCol >= 3 && toCol <= 4) score += 5;
+
+        return score;
     }
 
 }

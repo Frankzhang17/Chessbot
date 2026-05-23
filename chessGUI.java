@@ -59,7 +59,7 @@ public class chessGUI {
             @Override
             public void mousePressed(java.awt.event.MouseEvent e) {
                 int col = e.getX() / TILE_SIZE;
-                int row = 7 - (e.getY() / TILE_SIZE);
+                int row = flipped ? (e.getY() / TILE_SIZE) : 7 - (e.getY() / TILE_SIZE);
                 if (selectedRow == -1) {
                     if (board.get(row, col) != 0) {
                         selectedRow = row;
@@ -88,14 +88,18 @@ public class chessGUI {
                         else if (board.isCheckmate(false))  JOptionPane.showMessageDialog(frame, "Checkmate! White wins!");
                         else if (board.isStalemate(true))   JOptionPane.showMessageDialog(frame, "Stalemate! Its a draw!");
                         else if (board.isStalemate(false))  JOptionPane.showMessageDialog(frame, "Stalemate! Its a draw!");
-                        else if (board.isInCheck(true))     JOptionPane.showMessageDialog(frame, "White is in check!");
-                        else if (board.isInCheck(false))    JOptionPane.showMessageDialog(frame, "Black is in check!");
-                        else if (engine != null && board.whiteTurn == enginePlaysWhite) {
-                            int[] engineMove = engine.getBestMove(board);
-                            if (engineMove != null) {
-                                board.makeMove(engineMove[0], engineMove[1], engineMove[2], engineMove[3]);
-                                boardPanel.repaint();
+                        else {
+                            if (board.isInCheck(true))  JOptionPane.showMessageDialog(frame, "White is in check!");
+                            if (board.isInCheck(false)) JOptionPane.showMessageDialog(frame, "Black is in check!");
+
+                            if (engine != null && board.whiteTurn == enginePlaysWhite) {
+                                int[] engineMove = engine.getBestMove(board);
+                                if (engineMove != null) {
+                                    board.makeMove(engineMove[0], engineMove[1], engineMove[2], engineMove[3]);
+                                    boardPanel.repaint();
+                                }
                             }
+
                         }
                     }
                 }
@@ -114,6 +118,15 @@ public class chessGUI {
         frame.pack();
         frame.setLocationRelativeTo(null);
         frame.setVisible(true);
+
+        if (enginePlaysWhite) {
+            int[] engineMove = engine.getBestMove(board);
+            if (engineMove != null) {
+                board.makeMove(engineMove[0], engineMove[1], engineMove[2], engineMove[3]);
+                boardPanel.repaint();
+            }
+        
+        }
 
 
 

@@ -2,104 +2,264 @@ import java.util.ArrayList;
 
 public class MCTS {
 
-    static final int SIMULATIONS = 1000;
+    static final int MAX_DEPTH = 4;
     boolean playingAsWhite;
+
+    static final int[][] PAWN_TABLE = {
+        { 0,  0,  0,  0,  0,  0,  0,  0},
+        {50, 50, 50, 50, 50, 50, 50, 50},
+        {10, 10, 20, 30, 30, 20, 10, 10},
+        { 5,  5, 10, 25, 25, 10,  5,  5},
+        { 0,  0,  0, 20, 20,  0,  0,  0},
+        { 5, -5,-10,  0,  0,-10, -5,  5},
+        { 5, 10, 10,-20,-20, 10, 10,  5},
+        { 0,  0,  0,  0,  0,  0,  0,  0}
+    };
+
+    static final int[][] KNIGHT_TABLE = {
+        {-50,-40,-30,-30,-30,-30,-40,-50},
+        {-40,-20,  0,  0,  0,  0,-20,-40},
+        {-30,  0, 10, 15, 15, 10,  0,-30},
+        {-30,  5, 15, 20, 20, 15,  5,-30},
+        {-30,  0, 15, 20, 20, 15,  0,-30},
+        {-30,  5, 10, 15, 15, 10,  5,-30},
+        {-40,-20,  0,  5,  5,  0,-20,-40},
+        {-50,-40,-30,-30,-30,-30,-40,-50}
+    };
+
+    static final int[][] BISHOP_TABLE = {
+        {-20,-10,-10,-10,-10,-10,-10,-20},
+        {-10,  0,  0,  0,  0,  0,  0,-10},
+        {-10,  0,  5, 10, 10,  5,  0,-10},
+        {-10,  5,  5, 10, 10,  5,  5,-10},
+        {-10,  0, 10, 10, 10, 10,  0,-10},
+        {-10, 10, 10, 10, 10, 10, 10,-10},
+        {-10,  5,  0,  0,  0,  0,  5,-10},
+        {-20,-10,-10,-10,-10,-10,-10,-20}
+    };
+
+    static final int[][] ROOK_TABLE = {
+        { 0,  0,  0,  0,  0,  0,  0,  0},
+        { 5, 10, 10, 10, 10, 10, 10,  5},
+        {-5,  0,  0,  0,  0,  0,  0, -5},
+        {-5,  0,  0,  0,  0,  0,  0, -5},
+        {-5,  0,  0,  0,  0,  0,  0, -5},
+        {-5,  0,  0,  0,  0,  0,  0, -5},
+        {-5,  0,  0,  0,  0,  0,  0, -5},
+        { 0,  0,  0,  5,  5,  0,  0,  0}
+    };
+
+    static final int[][] QUEEN_TABLE = {
+        {-20,-10,-10, -5, -5,-10,-10,-20},
+        {-10,  0,  0,  0,  0,  0,  0,-10},
+        {-10,  0,  5,  5,  5,  5,  0,-10},
+        { -5,  0,  5,  5,  5,  5,  0, -5},
+        {  0,  0,  5,  5,  5,  5,  0, -5},
+        {-10,  5,  5,  5,  5,  5,  0,-10},
+        {-10,  0,  5,  0,  0,  0,  0,-10},
+        {-20,-10,-10, -5, -5,-10,-10,-20}
+    };
+
+    static final int[][] KING_TABLE = {
+        {-30,-40,-40,-50,-50,-40,-40,-30},
+        {-30,-40,-40,-50,-50,-40,-40,-30},
+        {-30,-40,-40,-50,-50,-40,-40,-30},
+        {-30,-40,-40,-50,-50,-40,-40,-30},
+        {-20,-30,-30,-40,-40,-30,-30,-20},
+        {-10,-20,-20,-20,-20,-20,-20,-10},
+        { 20, 20,  0,  0,  0,  0, 20, 20},
+        { 20, 30, 10,  0,  0, 10, 30, 20}
+    };
 
     public MCTS(boolean playingAsWhite) {
         this.playingAsWhite = playingAsWhite;
     }
 
+    // -------------------------------------------------------
+    // Main entry point — same signature as before so chessGUI
+    // doesn't need any changes
+    // -------------------------------------------------------
     public int[] getBestMove(Board board) {
-        MCTSNode root = new MCTSNode(null, null, board.getBoardSnapshot(), board.whiteTurn);
+        ArrayList<int[]> moves = getAllMoves(board, board.whiteTurn);
+        if (moves.isEmpty()) return null;
 
-        for (int i = 0; i < SIMULATIONS; i++) {
-            Board simBoard = copyBoard(board);
-            MCTSNode node = select(root, simBoard);
-            MCTSNode expanded = expand(node, simBoard);
-            double result = simulate(simBoard);
-            backpropagate(expanded, result);
-        }
+        // Order moves so the search sees good moves first (better pruning)
+        moves.sort((a, b) -> scoreMoveForOrdering(board, b) - scoreMoveForOrdering(board, a));
 
-        // Pick the child with the most visits
-        MCTSNode best = null;
-        for (MCTSNode child : root.children) {
-            if (best == null || child.visits > best.visits) best = child;
-        }
+        int[] bestMove = null;
+        int bestScore = board.whiteTurn ? Integer.MIN_VALUE : Integer.MAX_VALUE;
 
-        System.out.println("Engine is thinking...");
-        for (MCTSNode child : root.children) {
-            if (child.move != null) {
-                System.out.printf("Move [%d,%d -> %d,%d] visits: %d wins: %.0f winrate: %.1f%%%n",
-                    child.move[0], child.move[1], child.move[2], child.move[3],
-                    child.visits, child.wins,
-                    child.visits > 0 ? (child.wins / child.visits) * 100 : 0);
+        for (int[] move : moves) {
+            Board copy = copyBoard(board);
+            copy.makeMove(move[0], move[1], move[2], move[3]);
+
+            int score = minimax(copy, MAX_DEPTH - 1, Integer.MIN_VALUE, Integer.MAX_VALUE, !board.whiteTurn);
+
+            System.out.printf("Move [%d,%d -> %d,%d] score: %d%n",
+                move[0], move[1], move[2], move[3], score);
+
+            if (board.whiteTurn) {
+                if (score > bestScore) { bestScore = score; bestMove = move; }
+            } else {
+                if (score < bestScore) { bestScore = score; bestMove = move; }
             }
         }
-        if (best != null) {
-            System.out.printf("Best move: [%d,%d -> %d,%d] with %d visits%n",
-                best.move[0], best.move[1], best.move[2], best.move[3], best.visits);
+
+        if (bestMove != null) {
+            System.out.printf("Best move: [%d,%d -> %d,%d] score: %d%n",
+                bestMove[0], bestMove[1], bestMove[2], bestMove[3], bestScore);
         }
 
-        return best != null ? best.move : null;
+        return bestMove;
     }
 
-    public Board copyBoard(Board original) {
-        Board copy = new Board();
-        copy.squares = java.util.Arrays.copyOf(original.squares, original.squares.length);
-        copy.whiteTurn = original.whiteTurn;
-        copy.enPassantCol = original.enPassantCol;
-        copy.enPassantRow = original.enPassantRow;
-        copy.fiftyMoveCounter = original.fiftyMoveCounter;
-        copy.whiteKingMoved = original.whiteKingMoved;
-        copy.blackKingMoved = original.blackKingMoved;
-        copy.whiteRookMovedLeft = original.whiteRookMovedLeft;
-        copy.whiteRookMovedRight = original.whiteRookMovedRight;
-        copy.blackRookMovedLeft = original.blackRookMovedLeft;
-        copy.blackRookMovedRight = original.blackRookMovedRight;
-        copy.promotionChoice = original.promotionChoice;
-        return copy;
-    }
+    // -------------------------------------------------------
+    // Minimax with alpha-beta pruning
+    // maximizing = true  → white is choosing (wants highest score)
+    // maximizing = false → black is choosing (wants lowest score)
+    // -------------------------------------------------------
+    private int minimax(Board board, int depth, int alpha, int beta, boolean maximizing) {
 
-    public MCTSNode select(MCTSNode node, Board board) {
-        while (node.children.size() > 0) {
-            MCTSNode best = null;
-            for (MCTSNode child : node.children) {
-                if (best == null || child.getUCB() > best.getUCB()) best = child;
+        // Draw checks
+        if (board.fiftyMoveCounter >= 100) return 0;
+        if (board.isInsufficientMaterial()) return 0;
+
+        ArrayList<int[]> moves = getAllMoves(board, board.whiteTurn);
+
+        // Terminal node: no moves available
+        if (moves.isEmpty()) {
+            if (board.isInCheck(board.whiteTurn)) {
+                // Checkmate — penalise heavily; prefer faster mates with depth bonus
+                return board.whiteTurn ? (-100000 - depth) : (100000 + depth);
             }
-            node = best;
-            board.makeMove(node.move[0], node.move[1], node.move[2], node.move[3]);
+            return 0; // Stalemate
         }
-        return node;
-    }
 
-    public MCTSNode expand(MCTSNode node, Board board) {
-        ArrayList<int[]> allMoves = getAllMoves(board, board.whiteTurn);
-    
-        if (allMoves.size() == 0) return node;
+        // Reached search horizon — return static evaluation
+        if (depth == 0) return evaluate(board);
 
-        // If children already exist, just pick the unvisited one with highest UCB
-        if (node.children.size() > 0) {
-            MCTSNode selected = null;
-            for (MCTSNode child : node.children) {
-                if (selected == null || child.getUCB() > selected.getUCB()) selected = child;
+        // Order moves for better pruning at every level
+        moves.sort((a, b) -> scoreMoveForOrdering(board, b) - scoreMoveForOrdering(board, a));
+
+        if (maximizing) {
+            int best = Integer.MIN_VALUE;
+            for (int[] move : moves) {
+                Board copy = copyBoard(board);
+                copy.makeMove(move[0], move[1], move[2], move[3]);
+                int score = minimax(copy, depth - 1, alpha, beta, false);
+                best = Math.max(best, score);
+                alpha = Math.max(alpha, best);
+                if (beta <= alpha) break; // beta cutoff
             }
-            board.makeMove(selected.move[0], selected.move[1], selected.move[2], selected.move[3]);
-            return selected;
+            return best;
+        } else {
+            int best = Integer.MAX_VALUE;
+            for (int[] move : moves) {
+                Board copy = copyBoard(board);
+                copy.makeMove(move[0], move[1], move[2], move[3]);
+                int score = minimax(copy, depth - 1, alpha, beta, true);
+                best = Math.min(best, score);
+                beta = Math.min(beta, best);
+                if (beta <= alpha) break; // alpha cutoff
+            }
+            return best;
         }
-
-        // First time visiting this node — add ALL moves as children
-        for (int[] move : allMoves) {
-            MCTSNode child = new MCTSNode(node, move, board.getBoardSnapshot(), board.whiteTurn);
-            node.children.add(child);
-        }
-
-        // Pick a random child to simulate from first
-        MCTSNode selected = node.children.get((int)(Math.random() * node.children.size()));
-        board.makeMove(selected.move[0], selected.move[1], selected.move[2], selected.move[3]);
-        return selected;
     }
 
+    // -------------------------------------------------------
+    // Static evaluation — returns a score in centipawns
+    // positive = good for white, negative = good for black
+    // -------------------------------------------------------
+    public int evaluate(Board board) {
+        int score = 0;
+        for (int row = 0; row < 8; row++) {
+            for (int col = 0; col < 8; col++) {
+                int piece = board.get(row, col);
+                if (piece == 0) continue;
 
+                boolean isWhite = piece > 0;
+                int tableRow = isWhite ? (7 - row) : row;
+
+                int materialScore = 0;
+                int positionalScore = 0;
+
+                switch (Math.abs(piece)) {
+                    case 1:
+                        materialScore   = 100;
+                        positionalScore = PAWN_TABLE[tableRow][col];
+                        break;
+                    case 2:
+                        materialScore   = 320;
+                        positionalScore = KNIGHT_TABLE[tableRow][col];
+                        break;
+                    case 3:
+                        materialScore   = 330;
+                        positionalScore = BISHOP_TABLE[tableRow][col];
+                        break;
+                    case 4:
+                        materialScore   = 500;
+                        positionalScore = ROOK_TABLE[tableRow][col];
+                        break;
+                    case 5:
+                        materialScore   = 900;
+                        positionalScore = QUEEN_TABLE[tableRow][col];
+                        break;
+                    case 6:
+                        positionalScore = KING_TABLE[tableRow][col];
+                        break;
+                }
+
+                int total = materialScore + positionalScore;
+                score += isWhite ? total : -total;
+            }
+        }
+        return score;
+    }
+
+    // -------------------------------------------------------
+    // Move ordering score — higher = search this move first
+    // Uses MVV-LVA (Most Valuable Victim, Least Valuable Attacker)
+    // -------------------------------------------------------
+    public int scoreMoveForOrdering(Board board, int[] move) {
+        int score = 0;
+        int attacker = Math.abs(board.get(move[0], move[1]));
+        int victim   = Math.abs(board.get(move[2], move[3]));
+
+        // MVV-LVA: reward capturing valuable pieces with cheap pieces
+        if (victim != 0) {
+            score += pieceValue(victim) * 10 - pieceValue(attacker);
+        }
+
+        // Reward promotions
+        int piece = board.get(move[0], move[1]);
+        if ((piece == 1  && move[2] == 7) ||
+            (piece == -1 && move[2] == 0)) {
+            score += 900;
+        }
+
+        // Reward center control
+        int toRow = move[2];
+        int toCol = move[3];
+        if (toRow >= 3 && toRow <= 4 && toCol >= 3 && toCol <= 4) score += 10;
+
+        return score;
+    }
+
+    private int pieceValue(int pieceType) {
+        switch (pieceType) {
+            case 1: return 100;
+            case 2: return 320;
+            case 3: return 330;
+            case 4: return 500;
+            case 5: return 900;
+            case 6: return 20000;
+            default: return 0;
+        }
+    }
+
+    // -------------------------------------------------------
+    // Helpers — identical to before so nothing else breaks
+    // -------------------------------------------------------
     public ArrayList<int[]> getAllMoves(Board board, boolean white) {
         ArrayList<int[]> allMoves = new ArrayList<>();
 
@@ -128,87 +288,20 @@ public class MCTS {
         return allMoves;
     }
 
-    public double simulate(Board board) {
-        int maxMoves = 200;
-        int moveCount = 0;
-
-        while (moveCount < maxMoves) {
-            if (board.fiftyMoveCounter >= 100) return 0.5;
-            if (board.isInsufficientMaterial()) return 0.5;
-
-            ArrayList<int[]> moves = getAllMoves(board, board.whiteTurn);
-            if (moves.size() == 0) {
-                if (board.isInCheck(board.whiteTurn)) return board.whiteTurn == playingAsWhite ? 0.0 : 1.0;
-                return 0.5;
-            }
-
-            moves.sort((a, b) -> scoreMove(board, b) - scoreMove(board, a));
-            int topN = Math.max(1, moves.size() / 3);
-            int[] move = moves.get((int)(Math.random() * topN));
-            board.makeMove(move[0], move[1], move[2], move[3]);
-            moveCount++;
-        }
-
-        return evaluate(board);
+    public Board copyBoard(Board original) {
+        Board copy = new Board();
+        copy.squares          = java.util.Arrays.copyOf(original.squares, original.squares.length);
+        copy.whiteTurn        = original.whiteTurn;
+        copy.enPassantCol     = original.enPassantCol;
+        copy.enPassantRow     = original.enPassantRow;
+        copy.fiftyMoveCounter = original.fiftyMoveCounter;
+        copy.whiteKingMoved   = original.whiteKingMoved;
+        copy.blackKingMoved   = original.blackKingMoved;
+        copy.whiteRookMovedLeft  = original.whiteRookMovedLeft;
+        copy.whiteRookMovedRight = original.whiteRookMovedRight;
+        copy.blackRookMovedLeft  = original.blackRookMovedLeft;
+        copy.blackRookMovedRight = original.blackRookMovedRight;
+        copy.promotionChoice  = original.promotionChoice;
+        return copy;
     }
-
-    public void backpropagate(MCTSNode node, double result) {
-        while (node != null) {
-            node.visits++;
-            node.wins += result;
-            node = node.parent;
-        }
-    }
-
-    public int scoreMove(Board board, int[] move) {
-        int score = 0;
-        int target = board.get(move[2], move[3]);
-
-        // Reward captures based on piece value
-        switch (Math.abs(target)) {
-            case 1: score += 10;  break; // pawn
-            case 2: score += 30;  break; // knight
-            case 3: score += 30;  break; // bishop
-            case 4: score += 50;  break; // rook
-            case 5: score += 90;  break; // queen
-            case 6: score += 900; break; // king
-        }
-
-        // Reward moving pawns forward
-        int piece = board.get(move[0], move[1]);
-        if (piece == 1  && move[2] > move[0]) score += 2; // white pawn forward
-        if (piece == -1 && move[2] < move[0]) score += 2; // black pawn forward
-
-        // Reward controlling the center
-        int toRow = move[2];
-        int toCol = move[3];
-        if (toRow >= 3 && toRow <= 4 && toCol >= 3 && toCol <= 4) score += 5;
-
-        return score;
-    }
-
-    public double evaluate(Board board) {
-        int score = 0;
-        for (int row = 0; row < 8; row++) {
-            for (int col = 0; col < 8; col++) {
-                switch (board.get(row, col)) {
-                    case  1: score += 10;  break; // white pawn
-                    case  2: score += 30;  break; // white knight
-                    case  3: score += 30;  break; // white bishop
-                    case  4: score += 50;  break; // white rook
-                    case  5: score += 90;  break; // white queen
-                    case -1: score -= 10;  break; // black pawn
-                    case -2: score -= 30;  break; // black knight
-                    case -3: score -= 30;  break; // black bishop
-                    case -4: score -= 50;  break; // black rook
-                    case -5: score -= 90;  break; // black queen
-                }
-            }
-        }
-        double normalized = score / 500.0;
-        normalized = Math.max(-1.0, Math.min(1.0, normalized));
-        if (playingAsWhite) return (normalized + 1.0) / 2.0;
-        else                return (-normalized + 1.0) / 2.0;
-    }
-
 }

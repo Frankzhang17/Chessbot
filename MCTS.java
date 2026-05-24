@@ -133,26 +133,23 @@ public class MCTS {
         int moveCount = 0;
 
         while (moveCount < maxMoves) {
-            // Check if game is over
-            if (board.isCheckmate(true))  return playingAsWhite ? 0.0 : 1.0;
-            if (board.isCheckmate(false)) return playingAsWhite ? 1.0 : 0.0;
-            if (board.isStalemate(true))  return 0.5;
-            if (board.isStalemate(false)) return 0.5;
             if (board.fiftyMoveCounter >= 100) return 0.5;
             if (board.isInsufficientMaterial()) return 0.5;
 
-            // Get all legal moves and pick a random one
             ArrayList<int[]> moves = getAllMoves(board, board.whiteTurn);
-            if (moves.size() == 0) return 0.5;
+            if (moves.size() == 0) {
+                if (board.isInCheck(board.whiteTurn)) return board.whiteTurn == playingAsWhite ? 0.0 : 1.0;
+                return 0.5;
+            }
 
             moves.sort((a, b) -> scoreMove(board, b) - scoreMove(board, a));
             int topN = Math.max(1, moves.size() / 3);
             int[] move = moves.get((int)(Math.random() * topN));
             board.makeMove(move[0], move[1], move[2], move[3]);
             moveCount++;
-        } 
+        }
 
-        return 0.5; // if game goes too long call it a draw
+        return evaluate(board);
     }
 
     public void backpropagate(MCTSNode node, double result) {
@@ -188,6 +185,30 @@ public class MCTS {
         if (toRow >= 3 && toRow <= 4 && toCol >= 3 && toCol <= 4) score += 5;
 
         return score;
+    }
+
+    public double evaluate(Board board) {
+        int score = 0;
+        for (int row = 0; row < 8; row++) {
+            for (int col = 0; col < 8; col++) {
+                switch (board.get(row, col)) {
+                    case  1: score += 10;  break; // white pawn
+                    case  2: score += 30;  break; // white knight
+                    case  3: score += 30;  break; // white bishop
+                    case  4: score += 50;  break; // white rook
+                    case  5: score += 90;  break; // white queen
+                    case -1: score -= 10;  break; // black pawn
+                    case -2: score -= 30;  break; // black knight
+                    case -3: score -= 30;  break; // black bishop
+                    case -4: score -= 50;  break; // black rook
+                    case -5: score -= 90;  break; // black queen
+                }
+            }
+        }
+        double normalized = score / 500.0;
+        normalized = Math.max(-1.0, Math.min(1.0, normalized));
+        if (playingAsWhite) return (normalized + 1.0) / 2.0;
+        else                return (-normalized + 1.0) / 2.0;
     }
 
 }

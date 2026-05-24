@@ -58,7 +58,7 @@ public class chessGUI {
         boardPanel.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override
             public void mousePressed(java.awt.event.MouseEvent e) {
-                int col = e.getX() / TILE_SIZE;
+                int col = flipped ? 7 - (e.getX() / TILE_SIZE) : (e.getX() / TILE_SIZE);
                 int row = flipped ? (e.getY() / TILE_SIZE) : 7 - (e.getY() / TILE_SIZE);
                 if (selectedRow == -1) {
                     if (board.get(row, col) != 0) {
@@ -93,11 +93,13 @@ public class chessGUI {
                             if (board.isInCheck(false)) JOptionPane.showMessageDialog(frame, "Black is in check!");
 
                             if (engine != null && board.whiteTurn == enginePlaysWhite) {
-                                int[] engineMove = engine.getBestMove(board);
-                                if (engineMove != null) {
-                                    board.makeMove(engineMove[0], engineMove[1], engineMove[2], engineMove[3]);
-                                    boardPanel.repaint();
-                                }
+                                new Thread(() -> {
+                                    int[] engineMove = engine.getBestMove(board);
+                                    if (engineMove != null) {
+                                        board.makeMove(engineMove[0], engineMove[1], engineMove[2], engineMove[3]);
+                                        SwingUtilities.invokeLater(() -> boardPanel.repaint());
+                                    }
+                                }).start();
                             }
 
                         }
@@ -120,12 +122,13 @@ public class chessGUI {
         frame.setVisible(true);
 
         if (enginePlaysWhite) {
-            int[] engineMove = engine.getBestMove(board);
-            if (engineMove != null) {
-                board.makeMove(engineMove[0], engineMove[1], engineMove[2], engineMove[3]);
-                boardPanel.repaint();
-            }
-        
+            new Thread(() -> {
+                int[] engineMove = engine.getBestMove(board);
+                if (engineMove != null) {
+                    board.makeMove(engineMove[0], engineMove[1], engineMove[2], engineMove[3]);
+                    SwingUtilities.invokeLater(() -> boardPanel.repaint());
+                }
+            }).start();
         }
 
 
@@ -135,27 +138,31 @@ public class chessGUI {
     private static void drawBoard(Graphics g) {
         for (int displayRow = 0; displayRow < 8; displayRow++) {
             int row = flipped ? displayRow : 7 - displayRow;
-            for (int col = 0; col < 8; col++) {
-                boolean isLight = (row + col) % 2 == 0;
-                g.setColor(isLight ? LIGHT : DARK);
-                g.fillRect(col * TILE_SIZE, displayRow * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+            for (int displayCol = 0; displayCol < 8; displayCol++) {
+                int col = flipped ? 7 - displayCol : displayCol;
 
+                // Draw square
+                boolean isLight = (displayRow + displayCol) % 2 == 0;
+                g.setColor(isLight ? LIGHT : DARK);
+                g.fillRect(displayCol * TILE_SIZE, displayRow * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+
+                // Draw highlights
                 for (int[] move : validMoves) {
                     if (move[0] == row && move[1] == col) {
                         g.setColor(new Color(0, 255, 0, 100));
-                        g.fillRect(col * TILE_SIZE, displayRow * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                        g.fillRect(displayCol * TILE_SIZE, displayRow * TILE_SIZE, TILE_SIZE, TILE_SIZE);
                     }
                 }
 
-
+                // Draw piece
                 int piece = board.get(row, col);
                 if (piece != 0) {
                     BufferedImage img = pieceImages.get(piece);
-                    g.drawImage(img, col * TILE_SIZE, displayRow * TILE_SIZE, TILE_SIZE, TILE_SIZE, null);
+                    g.drawImage(img, displayCol * TILE_SIZE, displayRow * TILE_SIZE, TILE_SIZE, TILE_SIZE, null);
                 }
             }
         }
-    } 
+    }
     
 
     

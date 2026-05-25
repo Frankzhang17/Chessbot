@@ -126,10 +126,12 @@ public class chessGUI {
         if (enginePlaysWhite) {
             new Thread(() -> {
                 int[] engineMove = engine.getBestMove(board);
-                if (engineMove != null) {
-                    board.makeMove(engineMove[0], engineMove[1], engineMove[2], engineMove[3]);
-                    SwingUtilities.invokeLater(() -> boardPanel.repaint());
-                }
+                SwingUtilities.invokeLater(() -> {
+                    if (engineMove != null) {
+                        board.makeMove(engineMove[0], engineMove[1], engineMove[2], engineMove[3]);
+                        boardPanel.repaint();
+                    }
+                });
             }).start();
         }
 

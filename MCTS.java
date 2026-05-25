@@ -136,7 +136,7 @@ public class MCTS {
         }
 
         // Reached search horizon — return static evaluation
-        if (depth == 0) return evaluate(board);
+        if (depth == 0) return quiescence(board, alpha, beta);
 
         // Order moves for better pruning at every level
         moves.sort((a, b) -> scoreMoveForOrdering(board, b) - scoreMoveForOrdering(board, a));
@@ -287,6 +287,33 @@ public class MCTS {
 
         return allMoves;
     }
+
+    private int quiescence(Board board, int alpha, int beta) {
+        // Get a "stand pat" score — what's the position worth right now
+        int standPat = evaluate(board);
+
+        // Beta cutoff — position is already too good for opponent
+        if (standPat >= beta) return beta;
+
+        // Update alpha if standing pat is better
+        if (standPat > alpha) alpha = standPat;
+
+        // Only look at captures
+        ArrayList<int[]> moves = getAllMoves(board, board.whiteTurn);
+        moves.removeIf(move -> board.get(move[2], move[3]) == 0); // remove non-captures
+        moves.sort((a, b) -> scoreMoveForOrdering(board, b) - scoreMoveForOrdering(board, a));
+
+        for (int[] move : moves) {
+            Board copy = copyBoard(board);
+            copy.makeMove(move[0], move[1], move[2], move[3]);
+            int score = -quiescence(copy, -beta, -alpha);
+
+            if (score >= beta) return beta;
+            if (score > alpha) alpha = score;
+        }
+
+        return alpha;
+    }   
 
     public Board copyBoard(Board original) {
         Board copy = new Board();

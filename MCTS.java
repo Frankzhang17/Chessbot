@@ -1,8 +1,9 @@
 import java.util.ArrayList;
+import java.util.Arrays;
 
 public class MCTS {
 
-    static final int MAX_DEPTH = 3;
+    static final int MAX_DEPTH = 4;
     boolean playingAsWhite;
 
     static final int[][] PAWN_TABLE = {
@@ -79,19 +80,35 @@ public class MCTS {
         ArrayList<int[]> moves = getAllMoves(board, board.whiteTurn);
         if (moves.isEmpty()) return null;
 
+        // Initial move ordering
         moves.sort((a, b) -> scoreMoveForOrdering(board, b) - scoreMoveForOrdering(board, a));
 
         int[] bestMove = moves.get(0);
+
+        // Search depth 1 through MAX_DEPTH, each pass improves
+        // move ordering for the next pass
+        for (int depth = 1; depth <= MAX_DEPTH; depth++) {
+            int[] result = searchAtDepth(board, moves, depth);
+            if (result != null) bestMove = result;
+            System.out.println("Completed depth " + depth);
+        }
+
+        return bestMove;
+    }
+
+    private int[] searchAtDepth(Board board, ArrayList<int[]> moves, int depth) {
+        int[] bestMove = moves.get(0);
         int bestScore = board.whiteTurn ? Integer.MIN_VALUE : Integer.MAX_VALUE;
 
-        for (int[] move : moves) {
+        // Work on a copy of the list so re-sorting doesn't corrupt
+        // the list while we're iterating over it
+        ArrayList<int[]> movesToSearch = new ArrayList<>(moves);
+
+        for (int[] move : movesToSearch) {
             Board copy = copyBoard(board);
             copy.makeMove(move[0], move[1], move[2], move[3]);
 
-            int score = minimax(copy, MAX_DEPTH - 1, Integer.MIN_VALUE, Integer.MAX_VALUE, !board.whiteTurn);
-
-            System.out.printf("Move [%d,%d -> %d,%d] score: %d%n",
-                move[0], move[1], move[2], move[3], score);
+            int score = minimax(copy, depth - 1, Integer.MIN_VALUE, Integer.MAX_VALUE, !board.whiteTurn);
 
             if (board.whiteTurn) {
                 if (score > bestScore) { bestScore = score; bestMove = move; }
@@ -100,14 +117,22 @@ public class MCTS {
             }
         }
 
-        System.out.printf("Best move: [%d,%d -> %d,%d] score: %d%n",
-            bestMove[0], bestMove[1], bestMove[2], bestMove[3], bestScore);
+        // Re-sort the original moves list so best move is searched
+        // first at the next depth — this is what makes pruning better
+        final int[] thisBest = bestMove;
+        moves.sort((a, b) -> {
+            if (Arrays.equals(a, thisBest)) return -1;
+            if (Arrays.equals(b, thisBest)) return 1;
+            return scoreMoveForOrdering(board, b) - scoreMoveForOrdering(board, a);
+        });
+
+        System.out.printf("Depth %d best: [%d,%d -> %d,%d] score: %d%n",
+            depth, bestMove[0], bestMove[1], bestMove[2], bestMove[3], bestScore);
 
         return bestMove;
     }
 
     private int minimax(Board board, int depth, int alpha, int beta, boolean maximizing) {
-        // Treat repeated positions as draws — prevents perpetual check when winning
         if (board.isThreefoldRepetition()) return 0;
         if (board.fiftyMoveCounter >= 100) return 0;
         if (board.isInsufficientMaterial()) return 0;
@@ -118,7 +143,7 @@ public class MCTS {
             if (board.isInCheck(board.whiteTurn)) {
                 return board.whiteTurn ? (-100000 - depth) : (100000 + depth);
             }
-            return 0; // Stalemate
+            return 0;
         }
 
         if (depth == 0) return quiescence(board, alpha, beta, maximizing);
@@ -219,11 +244,10 @@ public class MCTS {
                 int positionalScore = 0;
 
                 switch (Math.abs(piece)) {
-                    case 1: { // pawn
+                    case 1: {
                         materialScore   = 100;
                         positionalScore = PAWN_TABLE[tableRow][col];
 
-                        // Passed pawn bonus — no enemy pawns blocking on same or adjacent files
                         if (isWhite) {
                             boolean passed = true;
                             for (int r = row + 1; r < 8 && passed; r++) {
@@ -231,7 +255,7 @@ public class MCTS {
                                 if (board.get(r, col) == -1)                passed = false;
                                 if (col < 7 && board.get(r, col + 1) == -1) passed = false;
                             }
-                            if (passed) positionalScore += 20 + (row * 5); // bigger bonus closer to promotion
+                            if (passed) positionalScore += 20 + (row * 5);
                         } else {
                             boolean passed = true;
                             for (int r = row - 1; r >= 0 && passed; r--) {
@@ -243,23 +267,23 @@ public class MCTS {
                         }
                         break;
                     }
-                    case 2: // knight
+                    case 2:
                         materialScore   = 320;
                         positionalScore = KNIGHT_TABLE[tableRow][col];
                         break;
-                    case 3: // bishop
+                    case 3:
                         materialScore   = 330;
                         positionalScore = BISHOP_TABLE[tableRow][col];
                         break;
-                    case 4: // rook
+                    case 4:
                         materialScore   = 500;
                         positionalScore = ROOK_TABLE[tableRow][col];
                         break;
-                    case 5: // queen
+                    case 5:
                         materialScore   = 900;
                         positionalScore = QUEEN_TABLE[tableRow][col];
                         break;
-                    case 6: // king
+                    case 6:
                         positionalScore = KING_TABLE[tableRow][col];
                         break;
                 }
@@ -269,13 +293,9 @@ public class MCTS {
             }
         }
 
-        // Reward castling rights — encourages king safety
         if (!board.whiteKingMoved) score += 15;
         if (!board.blackKingMoved) score -= 15;
 
-        // Discourage draws when winning — if score is clearly positive for white,
-        // returning a slightly worse score for repeated positions makes the engine
-        // avoid perpetual check when it has a winning advantage
         if (board.isThreefoldRepetition()) {
             return score > 0 ? score - 50 : score + 50;
         }
@@ -288,19 +308,16 @@ public class MCTS {
         int attacker = Math.abs(board.get(move[0], move[1]));
         int victim   = Math.abs(board.get(move[2], move[3]));
 
-        // MVV-LVA
         if (victim != 0) {
             score += pieceValue(victim) * 10 - pieceValue(attacker);
         }
 
-        // Reward promotions
         int piece = board.get(move[0], move[1]);
         if ((piece == 1  && move[2] == 7) ||
             (piece == -1 && move[2] == 0)) {
             score += 900;
         }
 
-        // Reward center control
         int toRow = move[2];
         int toCol = move[3];
         if (toRow >= 3 && toRow <= 4 && toCol >= 3 && toCol <= 4) score += 10;
@@ -350,7 +367,7 @@ public class MCTS {
 
     public Board copyBoard(Board original) {
         Board copy = new Board();
-        copy.squares             = java.util.Arrays.copyOf(original.squares, original.squares.length);
+        copy.squares             = Arrays.copyOf(original.squares, original.squares.length);
         copy.whiteTurn           = original.whiteTurn;
         copy.enPassantCol        = original.enPassantCol;
         copy.enPassantRow        = original.enPassantRow;
@@ -361,8 +378,7 @@ public class MCTS {
         copy.whiteRookMovedRight = original.whiteRookMovedRight;
         copy.blackRookMovedLeft  = original.blackRookMovedLeft;
         copy.blackRookMovedRight = original.blackRookMovedRight;
-        copy.promotionChoice     = 5; // always queen for engine
-        // Copy board history so repetition detection works during search
+        copy.promotionChoice     = 5;
         copy.boardHistory        = new ArrayList<>(original.boardHistory);
         return copy;
     }

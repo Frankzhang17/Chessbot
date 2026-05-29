@@ -2,7 +2,7 @@ import java.util.ArrayList;
 
 public class MCTS {
 
-    static final int MAX_DEPTH = 4;
+    static final int MAX_DEPTH = 3;
     boolean playingAsWhite;
 
     static final int[][] PAWN_TABLE = {
@@ -75,18 +75,13 @@ public class MCTS {
         this.playingAsWhite = playingAsWhite;
     }
 
-    // -------------------------------------------------------
-    // Main entry point — same signature as before so chessGUI
-    // doesn't need any changes
-    // -------------------------------------------------------
     public int[] getBestMove(Board board) {
         ArrayList<int[]> moves = getAllMoves(board, board.whiteTurn);
         if (moves.isEmpty()) return null;
 
-        // Order moves so the search sees good moves first (better pruning)
         moves.sort((a, b) -> scoreMoveForOrdering(board, b) - scoreMoveForOrdering(board, a));
 
-        int[] bestMove = null;
+        int[] bestMove = moves.get(0);
         int bestScore = board.whiteTurn ? Integer.MIN_VALUE : Integer.MAX_VALUE;
 
         for (int[] move : moves) {
@@ -105,40 +100,29 @@ public class MCTS {
             }
         }
 
-        if (bestMove != null) {
-            System.out.printf("Best move: [%d,%d -> %d,%d] score: %d%n",
-                bestMove[0], bestMove[1], bestMove[2], bestMove[3], bestScore);
-        }
+        System.out.printf("Best move: [%d,%d -> %d,%d] score: %d%n",
+            bestMove[0], bestMove[1], bestMove[2], bestMove[3], bestScore);
 
         return bestMove;
     }
 
-    // -------------------------------------------------------
-    // Minimax with alpha-beta pruning
-    // maximizing = true  → white is choosing (wants highest score)
-    // maximizing = false → black is choosing (wants lowest score)
-    // -------------------------------------------------------
     private int minimax(Board board, int depth, int alpha, int beta, boolean maximizing) {
-
-        // Draw checks
+        // Treat repeated positions as draws — prevents perpetual check when winning
+        if (board.isThreefoldRepetition()) return 0;
         if (board.fiftyMoveCounter >= 100) return 0;
         if (board.isInsufficientMaterial()) return 0;
 
         ArrayList<int[]> moves = getAllMoves(board, board.whiteTurn);
 
-        // Terminal node: no moves available
         if (moves.isEmpty()) {
             if (board.isInCheck(board.whiteTurn)) {
-                // Checkmate — penalise heavily; prefer faster mates with depth bonus
                 return board.whiteTurn ? (-100000 - depth) : (100000 + depth);
             }
             return 0; // Stalemate
         }
 
-        // Reached search horizon — return static evaluation
-        if (depth == 0) return quiescence(board, alpha, beta);
+        if (depth == 0) return quiescence(board, alpha, beta, maximizing);
 
-        // Order moves for better pruning at every level
         moves.sort((a, b) -> scoreMoveForOrdering(board, b) - scoreMoveForOrdering(board, a));
 
         if (maximizing) {
@@ -149,7 +133,7 @@ public class MCTS {
                 int score = minimax(copy, depth - 1, alpha, beta, false);
                 best = Math.max(best, score);
                 alpha = Math.max(alpha, best);
-                if (beta <= alpha) break; // beta cutoff
+                if (beta <= alpha) break;
             }
             return best;
         } else {
@@ -160,18 +144,69 @@ public class MCTS {
                 int score = minimax(copy, depth - 1, alpha, beta, true);
                 best = Math.min(best, score);
                 beta = Math.min(beta, best);
-                if (beta <= alpha) break; // alpha cutoff
+                if (beta <= alpha) break;
             }
             return best;
         }
     }
 
-    // -------------------------------------------------------
-    // Static evaluation — returns a score in centipawns
-    // positive = good for white, negative = good for black
-    // -------------------------------------------------------
+    private int quiescence(Board board, int alpha, int beta, boolean maximizing) {
+        if (board.isThreefoldRepetition()) return 0;
+
+        int standPat = evaluate(board);
+
+        if (maximizing) {
+            if (standPat >= beta) return beta;
+            if (standPat > alpha) alpha = standPat;
+        } else {
+            if (standPat <= alpha) return alpha;
+            if (standPat < beta) beta = standPat;
+        }
+
+        ArrayList<int[]> captures = new ArrayList<>();
+        for (int[] move : getAllMoves(board, board.whiteTurn)) {
+            int target = board.get(move[2], move[3]);
+            boolean isCapture = maximizing ? target < 0 : target > 0;
+
+            int piece = board.get(move[0], move[1]);
+            boolean isEnPassant = (piece == 1 || piece == -1)
+                && move[1] != move[3] && target == 0;
+
+            if (isCapture || isEnPassant) captures.add(move);
+        }
+
+        if (captures.isEmpty()) return standPat;
+
+        captures.sort((a, b) -> scoreMoveForOrdering(board, b) - scoreMoveForOrdering(board, a));
+
+        if (maximizing) {
+            int best = standPat;
+            for (int[] move : captures) {
+                Board copy = copyBoard(board);
+                copy.makeMove(move[0], move[1], move[2], move[3]);
+                int score = quiescence(copy, alpha, beta, false);
+                best = Math.max(best, score);
+                alpha = Math.max(alpha, best);
+                if (beta <= alpha) break;
+            }
+            return best;
+        } else {
+            int best = standPat;
+            for (int[] move : captures) {
+                Board copy = copyBoard(board);
+                copy.makeMove(move[0], move[1], move[2], move[3]);
+                int score = quiescence(copy, alpha, beta, true);
+                best = Math.min(best, score);
+                beta = Math.min(beta, best);
+                if (beta <= alpha) break;
+            }
+            return best;
+        }
+    }
+
     public int evaluate(Board board) {
         int score = 0;
+
         for (int row = 0; row < 8; row++) {
             for (int col = 0; col < 8; col++) {
                 int piece = board.get(row, col);
@@ -184,27 +219,47 @@ public class MCTS {
                 int positionalScore = 0;
 
                 switch (Math.abs(piece)) {
-                    case 1:
+                    case 1: { // pawn
                         materialScore   = 100;
                         positionalScore = PAWN_TABLE[tableRow][col];
+
+                        // Passed pawn bonus — no enemy pawns blocking on same or adjacent files
+                        if (isWhite) {
+                            boolean passed = true;
+                            for (int r = row + 1; r < 8 && passed; r++) {
+                                if (col > 0 && board.get(r, col - 1) == -1) passed = false;
+                                if (board.get(r, col) == -1)                passed = false;
+                                if (col < 7 && board.get(r, col + 1) == -1) passed = false;
+                            }
+                            if (passed) positionalScore += 20 + (row * 5); // bigger bonus closer to promotion
+                        } else {
+                            boolean passed = true;
+                            for (int r = row - 1; r >= 0 && passed; r--) {
+                                if (col > 0 && board.get(r, col - 1) == 1) passed = false;
+                                if (board.get(r, col) == 1)                passed = false;
+                                if (col < 7 && board.get(r, col + 1) == 1) passed = false;
+                            }
+                            if (passed) positionalScore += 20 + ((7 - row) * 5);
+                        }
                         break;
-                    case 2:
+                    }
+                    case 2: // knight
                         materialScore   = 320;
                         positionalScore = KNIGHT_TABLE[tableRow][col];
                         break;
-                    case 3:
+                    case 3: // bishop
                         materialScore   = 330;
                         positionalScore = BISHOP_TABLE[tableRow][col];
                         break;
-                    case 4:
+                    case 4: // rook
                         materialScore   = 500;
                         positionalScore = ROOK_TABLE[tableRow][col];
                         break;
-                    case 5:
+                    case 5: // queen
                         materialScore   = 900;
                         positionalScore = QUEEN_TABLE[tableRow][col];
                         break;
-                    case 6:
+                    case 6: // king
                         positionalScore = KING_TABLE[tableRow][col];
                         break;
                 }
@@ -213,19 +268,27 @@ public class MCTS {
                 score += isWhite ? total : -total;
             }
         }
+
+        // Reward castling rights — encourages king safety
+        if (!board.whiteKingMoved) score += 15;
+        if (!board.blackKingMoved) score -= 15;
+
+        // Discourage draws when winning — if score is clearly positive for white,
+        // returning a slightly worse score for repeated positions makes the engine
+        // avoid perpetual check when it has a winning advantage
+        if (board.isThreefoldRepetition()) {
+            return score > 0 ? score - 50 : score + 50;
+        }
+
         return score;
     }
 
-    // -------------------------------------------------------
-    // Move ordering score — higher = search this move first
-    // Uses MVV-LVA (Most Valuable Victim, Least Valuable Attacker)
-    // -------------------------------------------------------
     public int scoreMoveForOrdering(Board board, int[] move) {
         int score = 0;
         int attacker = Math.abs(board.get(move[0], move[1]));
         int victim   = Math.abs(board.get(move[2], move[3]));
 
-        // MVV-LVA: reward capturing valuable pieces with cheap pieces
+        // MVV-LVA
         if (victim != 0) {
             score += pieceValue(victim) * 10 - pieceValue(attacker);
         }
@@ -257,9 +320,6 @@ public class MCTS {
         }
     }
 
-    // -------------------------------------------------------
-    // Helpers — identical to before so nothing else breaks
-    // -------------------------------------------------------
     public ArrayList<int[]> getAllMoves(Board board, boolean white) {
         ArrayList<int[]> allMoves = new ArrayList<>();
 
@@ -288,47 +348,22 @@ public class MCTS {
         return allMoves;
     }
 
-    private int quiescence(Board board, int alpha, int beta) {
-        // Get a "stand pat" score — what's the position worth right now
-        int standPat = evaluate(board);
-
-        // Beta cutoff — position is already too good for opponent
-        if (standPat >= beta) return beta;
-
-        // Update alpha if standing pat is better
-        if (standPat > alpha) alpha = standPat;
-
-        // Only look at captures
-        ArrayList<int[]> moves = getAllMoves(board, board.whiteTurn);
-        moves.removeIf(move -> board.get(move[2], move[3]) == 0); // remove non-captures
-        moves.sort((a, b) -> scoreMoveForOrdering(board, b) - scoreMoveForOrdering(board, a));
-
-        for (int[] move : moves) {
-            Board copy = copyBoard(board);
-            copy.makeMove(move[0], move[1], move[2], move[3]);
-            int score = -quiescence(copy, -beta, -alpha);
-
-            if (score >= beta) return beta;
-            if (score > alpha) alpha = score;
-        }
-
-        return alpha;
-    }   
-
     public Board copyBoard(Board original) {
         Board copy = new Board();
-        copy.squares          = java.util.Arrays.copyOf(original.squares, original.squares.length);
-        copy.whiteTurn        = original.whiteTurn;
-        copy.enPassantCol     = original.enPassantCol;
-        copy.enPassantRow     = original.enPassantRow;
-        copy.fiftyMoveCounter = original.fiftyMoveCounter;
-        copy.whiteKingMoved   = original.whiteKingMoved;
-        copy.blackKingMoved   = original.blackKingMoved;
+        copy.squares             = java.util.Arrays.copyOf(original.squares, original.squares.length);
+        copy.whiteTurn           = original.whiteTurn;
+        copy.enPassantCol        = original.enPassantCol;
+        copy.enPassantRow        = original.enPassantRow;
+        copy.fiftyMoveCounter    = original.fiftyMoveCounter;
+        copy.whiteKingMoved      = original.whiteKingMoved;
+        copy.blackKingMoved      = original.blackKingMoved;
         copy.whiteRookMovedLeft  = original.whiteRookMovedLeft;
         copy.whiteRookMovedRight = original.whiteRookMovedRight;
         copy.blackRookMovedLeft  = original.blackRookMovedLeft;
         copy.blackRookMovedRight = original.blackRookMovedRight;
-        copy.promotionChoice  = original.promotionChoice;
+        copy.promotionChoice     = 5; // always queen for engine
+        // Copy board history so repetition detection works during search
+        copy.boardHistory        = new ArrayList<>(original.boardHistory);
         return copy;
     }
 }

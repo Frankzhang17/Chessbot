@@ -1,10 +1,56 @@
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 
 public class MCTS {
 
     static final int MAX_DEPTH = 4;
     boolean playingAsWhite;
+
+    // -------------------------------------------------------
+    // Transposition table — caches previously evaluated positions
+    // Key: Zobrist hash of the position
+    // Value: TTEntry with score, depth, and flag
+    // -------------------------------------------------------
+    HashMap<Long, TTEntry> transpositionTable = new HashMap<>();
+    static final int TT_MAX_SIZE = 1_000_000; // cap memory usage
+
+    // -------------------------------------------------------
+    // Zobrist hashing — each piece on each square gets a unique
+    // random number. The position hash is XOR of all of them.
+    // -------------------------------------------------------
+    static final long[][] ZOBRIST_TABLE = new long[13][64]; // 13 piece types (0=empty, 1-6 white, 7-12 black mapped)
+    static final long ZOBRIST_WHITE_TURN;
+
+    static {
+        java.util.Random rand = new java.util.Random(20250529L); // fixed seed = reproducible
+        for (int piece = 0; piece < 13; piece++) {
+            for (int sq = 0; sq < 64; sq++) {
+                ZOBRIST_TABLE[piece][sq] = rand.nextLong();
+            }
+        }
+        ZOBRIST_WHITE_TURN = rand.nextLong();
+    }
+
+    // Map piece value (-6 to 6) to zobrist table index (0 to 12)
+    private static int pieceIndex(int piece) {
+        if (piece == 0) return 0;
+        if (piece > 0)  return piece;       // white: 1-6
+        return 6 + (-piece);                // black: 7-12
+    }
+
+    // Compute Zobrist hash for the current board state
+    private long computeHash(Board board) {
+        long hash = 0L;
+        for (int sq = 0; sq < 64; sq++) {
+            int piece = board.squares[sq];
+            if (piece != 0) {
+                hash ^= ZOBRIST_TABLE[pieceIndex(piece)][sq];
+            }
+        }
+        if (board.whiteTurn) hash ^= ZOBRIST_WHITE_TURN;
+        return hash;
+    }
 
     static final int[][] PAWN_TABLE = {
         { 0,  0,  0,  0,  0,  0,  0,  0},
@@ -77,22 +123,24 @@ public class MCTS {
     }
 
     public int[] getBestMove(Board board) {
+        // Clear the transposition table at the start of each move
+        // so stale entries from previous moves don't mislead the search
+        transpositionTable.clear();
+
         ArrayList<int[]> moves = getAllMoves(board, board.whiteTurn);
         if (moves.isEmpty()) return null;
 
-        // Initial move ordering
         moves.sort((a, b) -> scoreMoveForOrdering(board, b) - scoreMoveForOrdering(board, a));
 
         int[] bestMove = moves.get(0);
 
-        // Search depth 1 through MAX_DEPTH, each pass improves
-        // move ordering for the next pass
         for (int depth = 1; depth <= MAX_DEPTH; depth++) {
             int[] result = searchAtDepth(board, moves, depth);
             if (result != null) bestMove = result;
             System.out.println("Completed depth " + depth);
         }
 
+        System.out.println("TT size: " + transpositionTable.size());
         return bestMove;
     }
 
@@ -100,8 +148,6 @@ public class MCTS {
         int[] bestMove = moves.get(0);
         int bestScore = board.whiteTurn ? Integer.MIN_VALUE : Integer.MAX_VALUE;
 
-        // Work on a copy of the list so re-sorting doesn't corrupt
-        // the list while we're iterating over it
         ArrayList<int[]> movesToSearch = new ArrayList<>(moves);
 
         for (int[] move : movesToSearch) {
@@ -117,8 +163,6 @@ public class MCTS {
             }
         }
 
-        // Re-sort the original moves list so best move is searched
-        // first at the next depth — this is what makes pruning better
         final int[] thisBest = bestMove;
         moves.sort((a, b) -> {
             if (Arrays.equals(a, thisBest)) return -1;
@@ -137,6 +181,15 @@ public class MCTS {
         if (board.fiftyMoveCounter >= 100) return 0;
         if (board.isInsufficientMaterial()) return 0;
 
+        // ---- Transposition table lookup ----
+        long hash = computeHash(board);
+        TTEntry entry = transpositionTable.get(hash);
+        if (entry != null && entry.depth >= depth) {
+            if (entry.flag == TTEntry.EXACT) return entry.score;
+            if (entry.flag == TTEntry.ALPHA && entry.score <= alpha) return alpha;
+            if (entry.flag == TTEntry.BETA  && entry.score >= beta)  return beta;
+        }
+
         ArrayList<int[]> moves = getAllMoves(board, board.whiteTurn);
 
         if (moves.isEmpty()) {
@@ -150,8 +203,11 @@ public class MCTS {
 
         moves.sort((a, b) -> scoreMoveForOrdering(board, b) - scoreMoveForOrdering(board, a));
 
+        int originalAlpha = alpha;
+        int best;
+
         if (maximizing) {
-            int best = Integer.MIN_VALUE;
+            best = Integer.MIN_VALUE;
             for (int[] move : moves) {
                 Board copy = copyBoard(board);
                 copy.makeMove(move[0], move[1], move[2], move[3]);
@@ -160,9 +216,8 @@ public class MCTS {
                 alpha = Math.max(alpha, best);
                 if (beta <= alpha) break;
             }
-            return best;
         } else {
-            int best = Integer.MAX_VALUE;
+            best = Integer.MAX_VALUE;
             for (int[] move : moves) {
                 Board copy = copyBoard(board);
                 copy.makeMove(move[0], move[1], move[2], move[3]);
@@ -171,8 +226,18 @@ public class MCTS {
                 beta = Math.min(beta, best);
                 if (beta <= alpha) break;
             }
-            return best;
         }
+
+        // ---- Store result in transposition table ----
+        if (transpositionTable.size() < TT_MAX_SIZE) {
+            int flag;
+            if (best <= originalAlpha)     flag = TTEntry.ALPHA;
+            else if (best >= beta)         flag = TTEntry.BETA;
+            else                           flag = TTEntry.EXACT;
+            transpositionTable.put(hash, new TTEntry(best, depth, flag));
+        }
+
+        return best;
     }
 
     private int quiescence(Board board, int alpha, int beta, boolean maximizing) {

@@ -7,6 +7,9 @@ public class MCTS {
     static final int MAX_DEPTH = 4;
     boolean playingAsWhite;
 
+    // Opening book — instant moves for known opening positions
+    OpeningBook openingBook = new OpeningBook();
+
     // -------------------------------------------------------
     // Transposition table — caches previously evaluated positions
     // Key: Zobrist hash of the position
@@ -123,6 +126,18 @@ public class MCTS {
     }
 
     public int[] getBestMove(Board board) {
+        // Check opening book first — instant response for known positions
+        int[] bookMove = openingBook.getMove(board);
+        if (bookMove != null) {
+            // Verify the book move is actually legal before playing it
+            Board test = copyBoard(board);
+            if (test.makeMove(bookMove[0], bookMove[1], bookMove[2], bookMove[3])) {
+                System.out.println("Book move: " + bookMove[0] + "," + bookMove[1]
+                    + " -> " + bookMove[2] + "," + bookMove[3]);
+                return bookMove;
+            }
+        }
+
         // Clear the transposition table at the start of each move
         // so stale entries from previous moves don't mislead the search
         transpositionTable.clear();
